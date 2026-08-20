@@ -1,0 +1,107 @@
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../features/evaluation/domain/entities/enums.dart';
+import '../../features/lot/domain/lot.dart';
+import '../mock/mock_data.dart';
+
+/// Local, on-device persistence so the app behaves like the live ERP within the
+/// device: lots you CREATE and stones you SAVE survive an app restart.
+///
+/// It stores only the *deltas* on top of the seed data:
+///   • created (off-list) lots  — ids start with "new-"
+///   • saved stones per lot     — incl. photos (base64)
+///
+/// Backed by shared_preferences (JSON). Small and dependency-light; when the
+/// real MeghaOS backend is wired this whole class is replaced by API calls.
+class LocalStore {
+  LocalStore._();
+  static final LocalStore I = LocalStore._();
+
+  static const _kLots = 'created_lots_v1';
+  static const _kStones = 'saved_stones_v1';
+
+  SharedPreferences? _p;
+
+  Future<void> init() async {
+    _p = await SharedPreferences.getInstance();
+  }
+
+  /// Load persisted deltas into the in-memory store at startup.
+  void load() {
+    final lotsJson = _p?.getString(_kLots);
+    if (lotsJson != null) {
+      for (final m in jsonDecode(lotsJson) as List) {
+        final lot = _lotFromMap(m as Map<String, dynamic>);
+        if (!MockData.lots.any((l) => l.id == lot.id)) MockData.lots.add(lot);
+      }
+    }
+    final stJson = _p?.getString(_kStones);
+    if (stJson != null) {
+      (jsonDecode(stJson) as Map<String, dynamic>).forEach((lotId, stones) {
+        MockData.savedStones[lotId] = (stones as List)
+            .map((s) => _stoneFromJson(s as Map<String, dynamic>))
+            .toList();
+      });
+    }
+  }
+
+  Future<void> persistLots() async {
+    final created =
+        MockData.lots.where((l) => l.id.startsWith('new-')).map(_lotToMap).toList();
+    await _p?.setString(_kLots, jsonEncode(created));
+  }
+
+  Future<void> persistStones() async {
+    final out = <String, dynamic>{};
+    MockData.savedStones.forEach((lotId, stones) {
+      out[lotId] = stones.map(_stoneToJson).toList();
+    });
+    await _p?.setString(_kStones, jsonEncode(out));
+  }
+
+  // ── Lot (de)serialization ──────────────────────────────────────────
+  Map<String, dynamic> _lotToMap(Lot l) => {
+        'id': l.id,
+        'tenderId': l.tenderId,
+        'lotRef': l.lotRef,
+        'sizeRange': l.sizeRange,
+        'lotName': l.lotName,
+        'publishedPieces': l.publishedPieces,
+        'publishedCarats': l.publishedCarats,
+        'weighedCarats': l.weighedCarats,
+        'willBid': l.willBid,
+        'workStatus': l.workStatus.index,
+      };
+
+  Lot _lotFromMap(Map<String, dynamic> m) => Lot(
+        id: m['id'] as String,
+        tenderId: m['tenderId'] as String,
+        lotRef: m['lotRef'] as String,
+        sizeRange: m['sizeRange'] as String? ?? '',
+        lotName: m['lotName'] as String? ?? 'Lot',
+        publishedPieces: m['publishedPieces'] as int? ?? 1,
+        publishedCarats: (m['publishedCarats'] as num?)?.toDouble() ?? 0,
+        weighedCarats: (m['weighedCarats'] as num?)?.toDouble(),
+        willBid: m['willBid'] as bool? ?? false,
+        workStatus: LotWorkStatus.values[(m['workStatus'] as int?) ?? 0],
+      );
+
+  // ── Stone map (de)serialization — images as base64 ─────────────────
+  Map<String, dynamic> _stoneToJson(Map<String, dynamic> s) => {
+        ...s,
+        'attrs': s['attrs'],
+        'images': (s['images'] as List? ?? [])
+            .map((b) => base64Encode(b as Uint8List))
+            .toList(),
+      };
+
+  Map<String, dynamic> _stoneFromJson(Map<String, dynamic> s) => {
+        ...s,
+        'attrs': Map<String, String>.from(s['attrs'] as Map),
+        'images': (s['images'] as List? ?? [])
+            .map((e) => base64Decode(e as String))
+            .toList(),
+        'videos': s['videos'] ?? 0,
+      };
+}

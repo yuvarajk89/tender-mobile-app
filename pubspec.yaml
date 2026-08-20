@@ -1,0 +1,65 @@
+name: donda_diamond
+description: "Donda Diamond ERP — rough-diamond tender evaluation (mobile/tablet/web)"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.6
+
+  # --- State management (clean architecture friendly, testable) ---
+  flutter_riverpod: ^2.5.1
+
+  # --- Navigation (declarative, deep-linkable, shell routes for bottom tabs) ---
+  go_router: ^14.2.0
+
+  # --- Value objects / immutability ---
+  equatable: ^2.0.5
+
+  # --- IDs for mock records (and later, client-side offline records) ---
+  uuid: ^4.4.0
+
+  # --- Formatting: money, carats, dates ---
+  intl: ^0.19.0
+
+  # --- Fonts + SVG to match the approved POC (lot-entry-final.html) 1:1 ---
+  google_fonts: ^6.2.1        # Outfit (UI) + JetBrains Mono (codes)
+  flutter_svg: ^2.0.10+1      # the POC's inline shape icons
+
+  # --- Media: take a photo / pick from gallery (bytes → web + mobile safe) ---
+  image_picker: ^1.1.2
+
+  # --- Local persistence (survives app restart): created lots + saved stones ---
+  shared_preferences: ^2.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+  # Generates the Donda Export launcher icons for android/ios/web.
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/logo/
+
+# Launcher icon (the Donda Export mark). Regenerate with:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  web:
+    generate: true
+    background_color: "#FFFFFF"
+    theme_color: "#2743B0"
+  image_path: "assets/logo/donda_logo_white.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/logo/donda_logo_fg.png"
