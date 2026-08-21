@@ -114,13 +114,27 @@ const _slotLabels = {
   'fluor': 'Fluor',
   'shape': 'Shape',
 };
-List<String> _optionsFor(String slot) => switch (slot) {
-      'colour' => GradeVocabulary.colours,
-      'clarity' => GradeVocabulary.clarities,
-      'fluor' => GradeVocabulary.fluors,
-      'shape' => GradeVocabulary.shapes,
-      _ => const [],
-    };
+// Grouped vocabulary for the tap-picker (from the BRD's observed lists).
+const Map<String, List<Map<String, dynamic>>> _groups = {
+  'colour': [
+    {'g': 'Fancy yellow', 'items': ['FVOY', 'FVY', 'FIY', 'FSVY', 'FDOY', 'FBY', 'FY+', 'FY', 'FLY', 'FLY+']},
+    {'g': 'Off-white', 'items': ['YZ', 'WX', 'UV']},
+    {'g': 'Pink', 'items': ['FIPP', 'FPP', 'LPP', 'LBPP', 'FAINT PINK']},
+  ],
+  'clarity': [
+    {'g': 'Very slight', 'items': ['VVS', 'VS', 'VS2']},
+    {'g': 'Slight', 'items': ['SI', 'SI1', 'SI2']},
+    {'g': 'Included', 'items': ['I1', 'I3']},
+  ],
+  'fluor': [
+    {'g': 'Fluor / tinge', 'items': ['NON', 'N', 'FB', 'MB', 'MB+', 'MY', 'SSB', 'CBLK', 'BLK']},
+  ],
+  'shape': [
+    {'g': 'Common', 'items': ['RAD', 'SQ RAD', 'OVL', 'PEAR', 'ROUND']},
+    {'g': 'Emerald / cushion', 'items': ['EM', 'SQ EM', 'LONG EM', 'CUSHION', 'CU', 'LONG CU']},
+    {'g': 'Other', 'items': ['HEART']},
+  ],
+};
 
 // ─── stone (a feed row = simple / bunch(pieces>1) / child) ─────────────
 class _Stone {
@@ -386,24 +400,177 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
     setState(() => _pendingImages.add(bytes));
   }
 
-  Future<void> _pickAttr(String slot) async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: _P.surface,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => _AttrSheet(slot: slot, options: _optionsFor(slot)),
-    );
-    if (picked == null) return;
+  /// Set one grade slot (colour/clarity/fluor/shape) into the typed line.
+  void _setSlot(String slot, String code) {
     final current = _parsed.slot(slot);
     var text = _code.text;
     if (current.isNotEmpty) {
       text = text.replaceAll(RegExp('\\b$current\\b'), '');
     }
-    text = '${text.trim()} $picked'.trim().replaceAll(RegExp(r'\s+'), ' ');
+    text = '${text.trim()} $code'.trim().replaceAll(RegExp(r'\s+'), ' ');
     _code.text = text;
     setState(() => _parsed = GradeParser.parse(text));
   }
+
+  /// The POC tab-picker: ONE sheet with Colour/Clarity/Fluor/Shape tabs,
+  /// grouped selectable chips, a filled-dot per tab, and auto-advance to the
+  /// next empty slot after a pick.
+  void _openGradePicker(String startSlot) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _P.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        String tab = startSlot;
+        final customCtl = TextEditingController();
+        return StatefulBuilder(builder: (ctx, setSheet) {
+          void pick(String code) {
+            _setSlot(tab, code);
+            final next =
+                _slots.where((s) => _parsed.slot(s).isEmpty && s != tab).toList();
+            if (next.isNotEmpty) {
+              setSheet(() => tab = next.first);
+            } else {
+              Navigator.pop(ctx);
+            }
+          }
+
+          return ConstrainedBox(
+            constraints:
+                BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.72),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                      color: _P.border, borderRadius: BorderRadius.circular(2))),
+              // tabs
+              Row(
+                children: _slots.map((s) {
+                  final activeTab = tab == s;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => setSheet(() => tab = s),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          border: Border(
+                              bottom: BorderSide(
+                                  color: activeTab ? _P.accent : _P.border,
+                                  width: activeTab ? 2 : 1)),
+                        ),
+                        child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(_slotLabels[s]!,
+                                  style: _P.ui(
+                                      size: 11,
+                                      w: FontWeight.w600,
+                                      color: activeTab ? _P.accentB : _P.t3)),
+                              if (_parsed.slot(s).isNotEmpty) ...[
+                                const SizedBox(width: 4),
+                                Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                        color: _P.ok, shape: BoxShape.circle)),
+                              ],
+                            ]),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              // grouped chips
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final grp in _groups[tab]!) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(0, 10, 0, 8),
+                            child: Text((grp['g'] as String).toUpperCase(),
+                                style: _P.mono(
+                                    size: 9, w: FontWeight.w700, color: _P.t3)),
+                          ),
+                          Wrap(spacing: 8, runSpacing: 8, children: [
+                            for (final code in grp['items'] as List<String>)
+                              _pickChip(code, _parsed.slot(tab) == code, pick),
+                          ]),
+                        ],
+                      ]),
+                ),
+              ),
+              // add-new
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+                child: Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: customCtl,
+                      textCapitalization: TextCapitalization.characters,
+                      style: _P.mono(size: 13, color: _P.t1),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        filled: true,
+                        fillColor: _P.input,
+                        hintText: 'Add a new ${_slotLabels[tab]!.toLowerCase()}…',
+                        hintStyle: _P.mono(size: 12, color: _P.t3),
+                        enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: _P.border)),
+                        focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: _P.accent)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () {
+                      final v = GradeVocabulary.normalise(customCtl.text);
+                      if (v.isNotEmpty) pick(v);
+                    },
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                          color: _P.accent,
+                          borderRadius: BorderRadius.circular(8)),
+                      child: Text('Add',
+                          style: _P.ui(w: FontWeight.w700, color: _P.onAccent)),
+                    ),
+                  ),
+                ]),
+              ),
+            ]),
+          );
+        });
+      },
+    );
+  }
+
+  Widget _pickChip(String code, bool selected, void Function(String) pick) =>
+      GestureDetector(
+        onTap: () => pick(code),
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 52, minHeight: 46),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? _P.accentGs : _P.card,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: selected ? _P.accent : _P.border, width: 1.5),
+          ),
+          child: Text(code,
+              style: _P.mono(size: 14, color: selected ? _P.accentB : _P.t1)),
+        ),
+      );
 
   void _addPlan() => setState(() {
         for (final p in _plans) {
@@ -903,7 +1070,7 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
     return Padding(
       padding: const EdgeInsets.only(right: 5),
       child: GestureDetector(
-        onTap: () => _pickAttr(slot),
+        onTap: () => _openGradePicker(slot),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
@@ -1081,90 +1248,3 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
 }
 
 // ─── grade attribute picker sheet (text chips + add-new) ───────────────
-class _AttrSheet extends StatefulWidget {
-  const _AttrSheet({required this.slot, required this.options});
-  final String slot;
-  final List<String> options;
-
-  @override
-  State<_AttrSheet> createState() => _AttrSheetState();
-}
-
-class _AttrSheetState extends State<_AttrSheet> {
-  final _custom = TextEditingController();
-  @override
-  void dispose() {
-    _custom.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Select ${_slotLabels[widget.slot]}',
-                  style: _P.ui(size: 16, w: FontWeight.w700, color: _P.t1)),
-              const SizedBox(height: 12),
-              Wrap(spacing: 8, runSpacing: 8, children: [
-                for (final o in widget.options)
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context, o),
-                    child: Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                          color: _P.card,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: _P.border)),
-                      child: Text(o, style: _P.mono(size: 14, color: _P.t1)),
-                    ),
-                  ),
-              ]),
-              Divider(color: _P.border, height: 24),
-              Row(children: [
-                Expanded(
-                  child: TextField(
-                    controller: _custom,
-                    textCapitalization: TextCapitalization.characters,
-                    style: _P.mono(size: 13, color: _P.t1),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      filled: true,
-                      fillColor: _P.input,
-                      hintText: 'Add a new code…',
-                      hintStyle: _P.mono(size: 13, color: _P.t3),
-                      enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: _P.border)),
-                      focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: _P.accent)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () {
-                    final v = GradeVocabulary.normalise(_custom.text);
-                    if (v.isNotEmpty) Navigator.pop(context, v);
-                  },
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                        color: _P.accent, borderRadius: BorderRadius.circular(8)),
-                    child: Text('Add',
-                        style: _P.ui(w: FontWeight.w700, color: _P.onAccent)),
-                  ),
-                ),
-              ]),
-            ]),
-      ),
-    );
-  }
-}

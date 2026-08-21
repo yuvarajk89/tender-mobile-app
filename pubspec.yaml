@@ -1,7 +1,7 @@
 name: donda_diamond
 description: "Donda Diamond ERP — rough-diamond tender evaluation (mobile/tablet/web)"
 publish_to: 'none'
-version: 0.1.1+2   # mock preview — POC + BRD extensions (5 inputs, break-even/bid, OR plans)
+version: 0.1.2+3   # tabbed grade selection picker (Colour/Clarity/Fluor/Shape)
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
