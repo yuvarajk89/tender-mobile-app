@@ -87,10 +87,9 @@ class LocalStore {
         workStatus: LotWorkStatus.values[(m['workStatus'] as int?) ?? 0],
       );
 
-  // ── Stone map (de)serialization — images as base64 ─────────────────
+  // ── Stone map (de)serialization — images as base64, rest passes through ─
   Map<String, dynamic> _stoneToJson(Map<String, dynamic> s) => {
         ...s,
-        'attrs': s['attrs'],
         'images': (s['images'] as List? ?? [])
             .map((b) => base64Encode(b as Uint8List))
             .toList(),
@@ -98,10 +97,8 @@ class LocalStore {
 
   Map<String, dynamic> _stoneFromJson(Map<String, dynamic> s) => {
         ...s,
-        'attrs': Map<String, String>.from(s['attrs'] as Map),
         'images': (s['images'] as List? ?? [])
             .map((e) => base64Decode(e as String))
             .toList(),
-        'videos': s['videos'] ?? 0,
       };
 }
