@@ -6,9 +6,8 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/theme_controller.dart';
-import '../../../data/mock/mock_data.dart';
-import '../../../data/persistence/local_store.dart';
 import '../../auth/presentation/auth_providers.dart';
+import 'prefs_providers.dart';
 
 /// Settings — theme, grade master data (Shape/Colour/Clarity lists), account.
 class SettingsPage extends ConsumerWidget {
@@ -18,6 +17,7 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(themeControllerProvider);
     final user = ref.watch(authControllerProvider).userName;
+    final gradeStyle = ref.watch(gradeStyleProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -37,17 +37,17 @@ class SettingsPage extends ConsumerWidget {
             _themeRow(context, ref, mode, ThemeMode.system, 'System default', Icons.brightness_auto_outlined),
           ]),
 
-          _sectionHeader(context, 'GRADE MASTER DATA'),
+          _sectionHeader(context, 'GRADE SELECTION STYLE'),
           _card(context, [
-            _masterRow(context, 'shape', 'Shapes', Icons.category_outlined),
+            _styleRow(context, ref, gradeStyle, GradeStyle.inline, 'Inline chips',
+                'Chips shown directly on the screen (today)', Icons.view_agenda_outlined),
             const Divider(height: 1),
-            _masterRow(context, 'colour', 'Colours', Icons.palette_outlined),
-            const Divider(height: 1),
-            _masterRow(context, 'clarity', 'Clarities', Icons.blur_on_outlined),
+            _styleRow(context, ref, gradeStyle, GradeStyle.tabbed, 'Tabbed picker',
+                'Tap a field → tabbed sheet with a list (yesterday)', Icons.list_alt_outlined),
           ]),
           Padding(
             padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 4, AppSpacing.lg, 0),
-            child: Text('Edit the Shape / Colour / Clarity options shown on the capture screen.',
+            child: Text('How Shape / Colour / Clarity are picked when capturing a lot. Values come from the backend.',
                 style: AppTypography.caption),
           ),
 
@@ -105,14 +105,17 @@ class SettingsPage extends ConsumerWidget {
     );
   }
 
-  Widget _masterRow(BuildContext context, String key, String label, IconData icon) {
+  Widget _styleRow(BuildContext context, WidgetRef ref, String current,
+      String value, String label, String subtitle, IconData icon) {
+    final selected = current == value;
     return ListTile(
       leading: Icon(icon),
       title: Text(label),
-      subtitle: Text('${MockData.masterList(key).length} values'),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => _MasterEditor(keyName: key, title: label))),
+      subtitle: Text(subtitle),
+      trailing: selected
+          ? Icon(Icons.check_circle, color: context.scheme.primary)
+          : const Icon(Icons.circle_outlined, color: Color(0xFFC4C9D6)),
+      onTap: () => ref.read(gradeStyleProvider.notifier).set(value),
     );
   }
 
@@ -139,82 +142,3 @@ class SettingsPage extends ConsumerWidget {
   }
 }
 
-/// Editor for one grade list — add/remove values (persisted).
-class _MasterEditor extends StatefulWidget {
-  const _MasterEditor({required this.keyName, required this.title});
-  final String keyName;
-  final String title;
-
-  @override
-  State<_MasterEditor> createState() => _MasterEditorState();
-}
-
-class _MasterEditorState extends State<_MasterEditor> {
-  final _add = TextEditingController();
-  List<String> get _list => MockData.masterList(widget.keyName);
-
-  @override
-  void dispose() {
-    _add.dispose();
-    super.dispose();
-  }
-
-  void _persist() => LocalStore.I.persistMaster();
-
-  void _addValue() {
-    final v = _add.text.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
-    if (v.isEmpty) return;
-    if (!_list.contains(v)) {
-      setState(() => _list.add(v));
-      _persist();
-    }
-    _add.clear();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
-      body: Column(children: [
-        Padding(
-          padding: AppSpacing.page,
-          child: Row(children: [
-            Expanded(
-              child: TextField(
-                controller: _add,
-                textCapitalization: TextCapitalization.characters,
-                onSubmitted: (_) => _addValue(),
-                decoration: InputDecoration(
-                  hintText: 'Add a ${widget.title.toLowerCase().replaceAll('s', '')} value…',
-                  isDense: true,
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            FilledButton(
-                onPressed: _addValue,
-                style: FilledButton.styleFrom(minimumSize: const Size(64, 48)),
-                child: const Text('Add')),
-          ]),
-        ),
-        Expanded(
-          child: ListView.separated(
-            padding: AppSpacing.pageH,
-            itemCount: _list.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) => ListTile(
-              title: Text(_list[i], style: AppTypography.numeric),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete_outline, color: AppColors.danger),
-                onPressed: () {
-                  setState(() => _list.removeAt(i));
-                  _persist();
-                },
-              ),
-            ),
-          ),
-        ),
-      ]),
-    );
-  }
-}

@@ -22,6 +22,11 @@ class LocalStore {
   static const _kCaptures = 'lot_captures_v1';
   static const _kWillBid = 'willbid_override_v1';
   static const _kMaster = 'grade_master_v1';
+  static const _kGradeStyle = 'grade_style_v1';
+
+  String? loadGradeStyle() => _p?.getString(_kGradeStyle);
+  Future<void> persistGradeStyle(String s) async =>
+      _p?.setString(_kGradeStyle, s);
 
   SharedPreferences? _p;
 

@@ -7,6 +7,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/image_utils.dart';
 import '../../../data/mock/mock_data.dart';
 import '../../../data/persistence/local_store.dart';
+import '../../settings/presentation/prefs_providers.dart';
 import '../domain/lot.dart';
 import 'lot_providers.dart';
 
@@ -186,7 +187,10 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
                       const SizedBox(height: 18),
                       _sectionLabel('GRADE'),
                       const SizedBox(height: 8),
-                      for (final s in _slots) _gradeRow(s),
+                      if (ref.watch(gradeStyleProvider) == GradeStyle.tabbed)
+                        _gradeFields()
+                      else
+                        for (final s in _slots) _gradeRow(s),
                       const SizedBox(height: 14),
                       _sectionLabel('NOTES (optional)'),
                       const SizedBox(height: 8),
@@ -355,6 +359,113 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
           ),
         ),
       ]),
+    );
+  }
+
+  // ── "Yesterday" style: three tappable fields → one tabbed picker sheet ──
+  Widget _gradeFields() {
+    return Column(children: [
+      for (final s in _slots)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: GestureDetector(
+            onTap: () => _openTabbedPicker(s),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                color: _P.card,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _P.border),
+              ),
+              child: Row(children: [
+                Text(_slotLabels[s]!, style: _P.ui(size: 13, w: FontWeight.w600, c: _P.t2)),
+                const Spacer(),
+                Text(_slotVal(s).isEmpty ? 'Select' : _slotVal(s),
+                    style: _slotVal(s).isEmpty
+                        ? _P.ui(size: 14, c: _P.t3)
+                        : _P.mono(size: 14, w: FontWeight.w700, c: _P.accent)),
+                const SizedBox(width: 6),
+                Icon(Icons.expand_more, color: _P.t3, size: 20),
+              ]),
+            ),
+          ),
+        ),
+    ]);
+  }
+
+  void _openTabbedPicker(String startSlot) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _P.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        String tab = startSlot;
+        return StatefulBuilder(builder: (ctx, setSheet) {
+          return ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                  width: 36, height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(color: _P.border, borderRadius: BorderRadius.circular(2))),
+              // tabs
+              Row(children: _slots.map((s) {
+                final active = tab == s;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setSheet(() => tab = s),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(
+                            color: active ? _P.accent : _P.border,
+                            width: active ? 2 : 1)),
+                      ),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Text(_slotLabels[s]!,
+                            style: _P.ui(size: 12, w: FontWeight.w600,
+                                c: active ? _P.accentB : _P.t3)),
+                        if (_slotVal(s).isNotEmpty) ...[
+                          const SizedBox(width: 4),
+                          Container(width: 6, height: 6,
+                              decoration: BoxDecoration(color: _P.ok, shape: BoxShape.circle)),
+                        ],
+                      ]),
+                    ),
+                  ),
+                );
+              }).toList()),
+              // vertical list of options
+              Flexible(
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  itemCount: _optionsFor(tab).length,
+                  separatorBuilder: (_, __) => Divider(height: 1, color: _P.border),
+                  itemBuilder: (_, i) {
+                    final code = _optionsFor(tab)[i];
+                    final sel = _slotVal(tab) == code;
+                    return ListTile(
+                      title: Text(code, style: _P.mono(size: 15, c: sel ? _P.accent : _P.t1)),
+                      trailing: sel ? Icon(Icons.check, color: _P.accent) : null,
+                      onTap: () {
+                        _setSlot(tab, sel ? '' : code);
+                        final next = _slots.where((s) => _slotVal(s).isEmpty && s != tab).toList();
+                        if (next.isNotEmpty) {
+                          setSheet(() => tab = next.first);
+                        } else {
+                          Navigator.pop(ctx);
+                        }
+                      },
+                    );
+                  },
+                ),
+              ),
+            ]),
+          );
+        });
+      },
     );
   }
 
