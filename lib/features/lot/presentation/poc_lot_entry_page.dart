@@ -8,7 +8,6 @@ import '../../../core/widgets/image_utils.dart';
 import '../../../data/mock/mock_data.dart';
 import '../../../data/persistence/local_store.dart';
 import '../../evaluation/domain/grade_vocabulary.dart';
-import '../../tender/presentation/tender_providers.dart';
 import '../domain/lot.dart';
 import 'lot_providers.dart';
 
@@ -140,7 +139,6 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
     _P.apply(Theme.of(context).brightness);
     _seed();
     final lot = ref.watch(lotProvider(widget.lotId)).valueOrNull;
-    final tender = ref.watch(tenderProvider(widget.tenderId)).valueOrNull;
 
     return Scaffold(
       backgroundColor: _P.bg,
@@ -156,39 +154,47 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
             style: _P.mono(size: 15, w: FontWeight.w700, c: _P.accent)),
         actions: [
           if (lot != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Center(
-                  child: Text(tender?.house ?? '',
-                      style: _P.ui(size: 12, c: _P.t2))),
+            TextButton(
+              onPressed: (_shape.isNotEmpty ||
+                      _colour.isNotEmpty ||
+                      _clarity.isNotEmpty ||
+                      _images.isNotEmpty)
+                  ? () => _save(toEstimate: false)
+                  : null,
+              child: Text('Draft', style: _P.ui(size: 13, w: FontWeight.w600, c: _P.t2)),
             ),
         ],
       ),
       body: lot == null
           ? const Center(child: Text('Lot not found'))
-          : ListView(
-              padding: const EdgeInsets.all(14),
+          : Column(
               children: [
-                _publishedCard(lot),
-                const SizedBox(height: 14),
-                _sectionLabel('PHOTOS / VIDEOS'),
-                const SizedBox(height: 8),
-                _mediaSection(),
-                const SizedBox(height: 18),
-                _sectionLabel('GRADE'),
-                const SizedBox(height: 8),
-                for (final s in _slots) _gradeRow(s),
-                const SizedBox(height: 14),
-                _sectionLabel('NOTES (optional)'),
-                const SizedBox(height: 8),
-                _notesField(),
-                if (_images.isNotEmpty) ...[
-                  const SizedBox(height: 18),
-                  _photoStrip(),
-                ],
-                const SizedBox(height: 22),
-                _saveButtons(),
-                const SizedBox(height: 24),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.all(14),
+                    children: [
+                      _publishedCard(lot),
+                      const SizedBox(height: 14),
+                      _sectionLabel('PHOTOS / VIDEOS'),
+                      const SizedBox(height: 8),
+                      _mediaSection(),
+                      const SizedBox(height: 18),
+                      _sectionLabel('GRADE'),
+                      const SizedBox(height: 8),
+                      for (final s in _slots) _gradeRow(s),
+                      const SizedBox(height: 14),
+                      _sectionLabel('NOTES (optional)'),
+                      const SizedBox(height: 8),
+                      _notesField(),
+                      if (_images.isNotEmpty) ...[
+                        const SizedBox(height: 18),
+                        _photoStrip(),
+                      ],
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+                _bottomSaveBar(),
               ],
             ),
     );
@@ -366,35 +372,38 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
         ),
       );
 
-  Widget _saveButtons() {
+  /// Pinned bottom bar so Save is ALWAYS reachable without scrolling (fast work).
+  Widget _bottomSaveBar() {
     final hasAny =
         _shape.isNotEmpty || _colour.isNotEmpty || _clarity.isNotEmpty || _images.isNotEmpty;
-    return Column(children: [
-      SizedBox(
-        width: double.infinity,
-        height: 52,
-        child: FilledButton.icon(
-          onPressed: hasAny ? () => _save(toEstimate: true) : null,
-          style: FilledButton.styleFrom(
-            backgroundColor: _P.accent,
-            foregroundColor: _P.onAccent,
-            disabledBackgroundColor: _P.border,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return Container(
+      decoration: BoxDecoration(
+        color: _P.surface,
+        border: Border(top: BorderSide(color: _P.border)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, -2))],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+          child: SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: FilledButton.icon(
+              onPressed: hasAny ? () => _save(toEstimate: true) : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: _P.accent,
+                foregroundColor: _P.onAccent,
+                disabledBackgroundColor: _P.border,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.check),
+              label: Text('Save & move to Estimate',
+                  style: _P.ui(size: 14, w: FontWeight.w700, c: _P.onAccent)),
+            ),
           ),
-          icon: const Icon(Icons.check),
-          label: Text('Save & move to Estimate',
-              style: _P.ui(size: 14, w: FontWeight.w700, c: _P.onAccent)),
         ),
       ),
-      const SizedBox(height: 8),
-      SizedBox(
-        width: double.infinity,
-        child: TextButton(
-          onPressed: hasAny ? () => _save(toEstimate: false) : null,
-          child: Text('Save draft (stay in capture)',
-              style: _P.ui(size: 13, c: _P.t2)),
-        ),
-      ),
-    ]);
+    );
   }
 }
