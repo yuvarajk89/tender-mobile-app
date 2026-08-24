@@ -20,6 +20,7 @@ class LocalStore {
 
   static const _kLots = 'created_lots_v1';
   static const _kCaptures = 'lot_captures_v1';
+  static const _kWillBid = 'willbid_override_v1';
 
   SharedPreferences? _p;
 
@@ -42,7 +43,15 @@ class LocalStore {
         MockData.captures[lotId] = _captureFromJson(c as Map<String, dynamic>);
       });
     }
+    final wbJson = _p?.getString(_kWillBid);
+    if (wbJson != null) {
+      (jsonDecode(wbJson) as Map<String, dynamic>)
+          .forEach((lotId, v) => MockData.willBidOverride[lotId] = v as bool);
+    }
   }
+
+  Future<void> persistWillBid() async =>
+      _p?.setString(_kWillBid, jsonEncode(MockData.willBidOverride));
 
   Future<void> persistLots() async {
     final created =

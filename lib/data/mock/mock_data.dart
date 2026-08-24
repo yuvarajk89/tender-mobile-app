@@ -231,6 +231,14 @@ class MockData {
   //   yieldPct, pricePerCt, marginPct,     ← estimate team
   // }
   static final Map<String, Map<String, dynamic>> captures = {};
+
+  /// Per-lot Will-Bid override set on the phone (lotId → true/false). Falls back
+  /// to the lot's published willBid flag when the buyer hasn't touched it.
+  static final Map<String, bool> willBidOverride = {};
+  static bool willBid(Lot lot) => willBidOverride[lot.id] ?? lot.willBid;
+  static void toggleWillBid(Lot lot) =>
+      willBidOverride[lot.id] = !willBid(lot);
+
   static void addLot(Lot lot) => lots.add(lot);
 
   static Map<String, dynamic>? capture(String lotId) => captures[lotId];

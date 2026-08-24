@@ -8,6 +8,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/mock/mock_data.dart';
+import '../../../data/persistence/local_store.dart';
 import '../domain/lot.dart';
 import 'lot_providers.dart';
 
@@ -77,8 +78,9 @@ class _LotListBodyState extends ConsumerState<LotListBody> {
                   title: 'Could not load lots',
                   message: '$e'),
               data: (lots) {
-                var filtered =
-                    willBidOnly ? lots.where((l) => l.willBid).toList() : lots;
+                var filtered = willBidOnly
+                    ? lots.where((l) => MockData.willBid(l)).toList()
+                    : lots;
                 if (query.isNotEmpty) {
                   filtered = filtered
                       .where((l) =>
@@ -98,7 +100,14 @@ class _LotListBodyState extends ConsumerState<LotListBody> {
                   itemCount: filtered.length,
                   separatorBuilder: (_, __) =>
                       const SizedBox(height: AppSpacing.sm),
-                  itemBuilder: (_, i) => _LotTile(lot: filtered[i]),
+                  itemBuilder: (_, i) => _LotTile(
+                    lot: filtered[i],
+                    onToggleWillBid: () {
+                      MockData.toggleWillBid(filtered[i]);
+                      LocalStore.I.persistWillBid();
+                      setState(() {});
+                    },
+                  ),
                 );
               },
             ),
@@ -110,8 +119,9 @@ class _LotListBodyState extends ConsumerState<LotListBody> {
 }
 
 class _LotTile extends StatelessWidget {
-  const _LotTile({required this.lot});
+  const _LotTile({required this.lot, required this.onToggleWillBid});
   final Lot lot;
+  final VoidCallback onToggleWillBid;
 
   (Color, String) get _status {
     // Capture status drives the dot + label (todo → captured → estimated).
@@ -146,7 +156,7 @@ class _LotTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis),
                     ),
                     const SizedBox(width: AppSpacing.sm),
-                    if (lot.willBid) const PillTag(text: 'WILL BID'),
+                    _willBidChip(context),
                   ]),
                   const SizedBox(height: 2),
                   Text('${lot.lotName} · ${lot.sizeRange}',
@@ -167,6 +177,36 @@ class _LotTile extends StatelessWidget {
             Icon(Icons.chevron_right, color: context.scheme.outline),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Tappable Will-Bid toggle: grey ☐ when off, gold ✓ WILL BID when on.
+  Widget _willBidChip(BuildContext context) {
+    final on = MockData.willBid(lot);
+    return GestureDetector(
+      onTap: onToggleWillBid,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: on ? context.scheme.primaryContainer : context.surfaceAlt,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+          border: Border.all(
+              color: on ? context.scheme.primary : context.scheme.outlineVariant),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(on ? Icons.check : Icons.check_box_outline_blank,
+              size: 12,
+              color: on ? context.scheme.onPrimaryContainer : context.scheme.outline),
+          const SizedBox(width: 3),
+          Text('WILL BID',
+              style: AppTypography.caption.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: on
+                      ? context.scheme.onPrimaryContainer
+                      : context.scheme.outline)),
+        ]),
       ),
     );
   }
