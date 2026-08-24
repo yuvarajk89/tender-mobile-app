@@ -1,7 +1,7 @@
 name: donda_diamond
 description: "Donda Diamond ERP — rough-diamond tender evaluation (mobile/tablet/web)"
 publish_to: 'none'
-version: 0.2.3+11   # Summary reads saved captures/estimates (local); all tabs persist
+version: 0.2.4+12   # capture: photo thumbnails strip above Save (tap to preview)
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

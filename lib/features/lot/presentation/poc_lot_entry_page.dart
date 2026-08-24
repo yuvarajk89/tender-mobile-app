@@ -182,6 +182,10 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
                 _sectionLabel('NOTES (optional)'),
                 const SizedBox(height: 8),
                 _notesField(),
+                if (_images.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  _photoStrip(),
+                ],
                 const SizedBox(height: 22),
                 _saveButtons(),
                 const SizedBox(height: 24),
@@ -244,27 +248,32 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
       );
 
   Widget _mediaSection() {
-    return Column(children: [
-      Row(children: [
-        Expanded(
-          child: _bigBtn(Icons.photo_camera_outlined, 'Camera', _addPhoto),
+    return Row(children: [
+      Expanded(child: _bigBtn(Icons.photo_camera_outlined, 'Camera', _addPhoto)),
+      const SizedBox(width: 10),
+      Expanded(child: _bigBtn(Icons.photo_library_outlined, 'Gallery', _addPhoto)),
+    ]);
+  }
+
+  /// Compact clickable thumbnail strip shown just above Save — tap a thumb to
+  /// preview (zoom), ✕ to remove.
+  Widget _photoStrip() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _sectionLabel('${_images.length} PHOTO${_images.length == 1 ? '' : 'S'} — tap to preview'),
+      const SizedBox(height: 8),
+      SizedBox(
+        height: 64,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: _images.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (_, i) => ImageThumb(
+              images: _images,
+              index: i,
+              size: 60,
+              onDelete: () => setState(() => _images.removeAt(i))),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _bigBtn(Icons.photo_library_outlined, 'Gallery', _addPhoto),
-        ),
-      ]),
-      if (_images.isNotEmpty) ...[
-        const SizedBox(height: 10),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          for (var i = 0; i < _images.length; i++)
-            ImageThumb(
-                images: _images,
-                index: i,
-                size: 78,
-                onDelete: () => setState(() => _images.removeAt(i))),
-        ]),
-      ],
+      ),
     ]);
   }
 
