@@ -26,20 +26,18 @@ import 'lot_providers.dart';
 
 // theme-aware palette
 class _P {
-  static late Color bg, surface, card, elevated, input, accent, accentB,
-      accentGs, ok, err, info, t1, t2, t3, border, borderA, onAccent;
+  static late Color bg, surface, card, input, accent, accentB,
+      accentGs, ok, info, t1, t2, t3, border, borderA, onAccent;
   static void apply(Brightness b) {
     final d = b == Brightness.dark;
     bg = d ? const Color(0xFF0E1017) : const Color(0xFFF6F7FB);
     surface = d ? const Color(0xFF181B24) : const Color(0xFFFFFFFF);
     card = d ? const Color(0xFF1E2230) : const Color(0xFFFFFFFF);
-    elevated = d ? const Color(0xFF262B3B) : const Color(0xFFF0F2F8);
     input = d ? const Color(0xFF14171F) : const Color(0xFFF2F4F9);
     accent = d ? const Color(0xFFD4A853) : const Color(0xFFA9812E);
     accentB = d ? const Color(0xFFF0C95E) : const Color(0xFF8A6A22);
     accentGs = d ? const Color(0x40D4A853) : const Color(0x33A9812E);
     ok = d ? const Color(0xFF2DD4A0) : const Color(0xFF13A15A);
-    err = d ? const Color(0xFFF87171) : const Color(0xFFD23B3B);
     info = d ? const Color(0xFF60A5FA) : const Color(0xFF2743B0);
     t1 = d ? const Color(0xFFE8E6E3) : const Color(0xFF161A2B);
     t2 = d ? const Color(0xFF9AA0B4) : const Color(0xFF5B627A);
