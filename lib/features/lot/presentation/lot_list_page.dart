@@ -32,6 +32,30 @@ class _LotListBodyState extends ConsumerState<LotListBody> {
     super.dispose();
   }
 
+  /// Toggle a lot's Will-Bid + show a confirmation with UNDO.
+  void _toggleWillBid(Lot lot) {
+    MockData.toggleWillBid(lot);
+    LocalStore.I.persistWillBid();
+    setState(() {});
+    final on = MockData.willBid(lot);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(on
+            ? '${lot.lotRef} marked Will Bid'
+            : '${lot.lotRef} removed from Will Bid'),
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'UNDO',
+          onPressed: () {
+            MockData.toggleWillBid(lot);
+            LocalStore.I.persistWillBid();
+            setState(() {});
+          },
+        ),
+      ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final lotsAsync = ref.watch(lotsProvider(widget.tenderId));
@@ -102,11 +126,7 @@ class _LotListBodyState extends ConsumerState<LotListBody> {
                       const SizedBox(height: AppSpacing.sm),
                   itemBuilder: (_, i) => _LotTile(
                     lot: filtered[i],
-                    onToggleWillBid: () {
-                      MockData.toggleWillBid(filtered[i]);
-                      LocalStore.I.persistWillBid();
-                      setState(() {});
-                    },
+                    onToggleWillBid: () => _toggleWillBid(filtered[i]),
                   ),
                 );
               },
@@ -138,6 +158,7 @@ class _LotTile extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
       onTap: () => context.go('/tender/${lot.tenderId}/lot/${lot.id}'),
+      onLongPress: () => _showMenu(context),
       child: SectionCard(
         padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg, vertical: AppSpacing.md),
@@ -145,68 +166,100 @@ class _LotTile extends StatelessWidget {
           children: [
             _thumb(context, statusColor),
             const SizedBox(width: AppSpacing.md),
+            // lot ref + name get the FULL width now (no inline chip).
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [
-                    Expanded(
-                      child: Text(lot.lotRef,
-                          style: AppTypography.title,
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    _willBidChip(context),
-                  ]),
+                  Text(lot.lotRef,
+                      style: AppTypography.title,
+                      overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 2),
                   Text('${lot.lotName} · ${lot.sizeRange}',
                       style: AppTypography.caption,
                       overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 3),
+                  Row(children: [
+                    Text(Fmt.carats(lot.workingCarats),
+                        style: AppTypography.caption
+                            .copyWith(fontWeight: FontWeight.w700)),
+                    Text('  ·  ${lot.publishedPieces} pc  ·  $statusLabel',
+                        style: AppTypography.caption),
+                  ]),
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(Fmt.carats(lot.workingCarats), style: AppTypography.numeric),
-                Text('${lot.publishedPieces} pc · $statusLabel',
-                    style: AppTypography.caption),
-              ],
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right, color: context.scheme.outline),
+            const SizedBox(width: AppSpacing.sm),
+            _willBidStar(context),
           ],
         ),
       ),
     );
   }
 
-  /// Tappable Will-Bid toggle: grey ☐ when off, gold ✓ WILL BID when on.
-  Widget _willBidChip(BuildContext context) {
+  /// Long-press menu: quick actions without opening the lot.
+  void _showMenu(BuildContext context) {
+    final on = MockData.willBid(lot);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: context.scheme.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusLg))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: AppSpacing.page,
+            child: Row(children: [
+              Expanded(
+                child: Text('${lot.lotRef} · ${lot.lotName}',
+                    style: AppTypography.title, overflow: TextOverflow.ellipsis),
+              ),
+            ]),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: Icon(on ? Icons.star_rounded : Icons.star_outline_rounded,
+                color: on ? AppColors.accent : context.scheme.outline),
+            title: Text(on ? 'Remove from Will Bid' : 'Mark as Will Bid'),
+            onTap: () {
+              onToggleWillBid();
+              Navigator.pop(ctx);
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.camera_alt_outlined, color: context.scheme.primary),
+            title: const Text('Open & capture'),
+            onTap: () {
+              Navigator.pop(ctx);
+              context.go('/tender/${lot.tenderId}/lot/${lot.id}');
+            },
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ]),
+      ),
+    );
+  }
+
+  /// Will-Bid shortlist toggle — a star on the far right. Gold filled = will bid,
+  /// grey outline = not. Doesn't steal width from the lot name.
+  Widget _willBidStar(BuildContext context) {
     final on = MockData.willBid(lot);
     return GestureDetector(
       onTap: onToggleWillBid,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        width: 44,
+        height: 44,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: on ? context.scheme.primaryContainer : context.surfaceAlt,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-          border: Border.all(
-              color: on ? context.scheme.primary : context.scheme.outlineVariant),
+          color: on ? context.scheme.primaryContainer : Colors.transparent,
+          shape: BoxShape.circle,
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(on ? Icons.check : Icons.check_box_outline_blank,
-              size: 12,
-              color: on ? context.scheme.onPrimaryContainer : context.scheme.outline),
-          const SizedBox(width: 3),
-          Text('WILL BID',
-              style: AppTypography.caption.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: on
-                      ? context.scheme.onPrimaryContainer
-                      : context.scheme.outline)),
-        ]),
+        child: Icon(
+          on ? Icons.star_rounded : Icons.star_outline_rounded,
+          size: 26,
+          color: on ? AppColors.accent : context.scheme.outline,
+        ),
       ),
     );
   }
