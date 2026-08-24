@@ -94,19 +94,31 @@ class LocalStore {
     await _p?.setString(_kCaptures, jsonEncode(out));
   }
 
-  // ── Capture (de)serialization — images as base64, rest passes through ──
+  // ── Capture (de)serialization — subs[].images as base64 ──────────────
   Map<String, dynamic> _captureToJson(Map<String, dynamic> c) => {
         ...c,
-        'images': (c['images'] as List? ?? [])
-            .map((b) => base64Encode(b as Uint8List))
-            .toList(),
+        'subs': ((c['subs'] as List?) ?? []).map((s) {
+          final m = s as Map<String, dynamic>;
+          return {
+            ...m,
+            'images': (m['images'] as List? ?? [])
+                .map((b) => base64Encode(b as Uint8List))
+                .toList(),
+          };
+        }).toList(),
       };
 
   Map<String, dynamic> _captureFromJson(Map<String, dynamic> c) => {
         ...c,
-        'images': (c['images'] as List? ?? [])
-            .map((e) => base64Decode(e as String))
-            .toList(),
+        'subs': ((c['subs'] as List?) ?? []).map((s) {
+          final m = s as Map<String, dynamic>;
+          return {
+            ...m,
+            'images': (m['images'] as List? ?? [])
+                .map((e) => base64Decode(e as String))
+                .toList(),
+          };
+        }).toList(),
       };
 
   // ── Lot (de)serialization ──────────────────────────────────────────

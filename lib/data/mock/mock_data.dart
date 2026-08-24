@@ -220,18 +220,20 @@ class MockData {
       lots.where((l) => l.tenderId == tenderId).toList();
 
   // ── session store: ONE capture per lot (mutable, persisted by LocalStore) ─
-  // A "capture" is what the buyer records at the table for a lot: grade
-  // (shape/colour/clarity) + photos + notes. The lot's stone count & weight
-  // come from the PDF and are NOT re-entered. After capture the lot moves to the
-  // estimate team, who fill yield% + $/ct (status → estimated).
+  // A lot is split into SUBS — each sub has a grade + its own pieces + weight +
+  // photos. The buyer enters 1 sub (whole lot) or many; the split pcs/wt must
+  // reconcile to the lot's published pcs/wt. After capture it moves to estimate.
   //
   // captures[lotId] = {
-  //   shape, colour, clarity, notes,       ← buyer (capture)
-  //   images: [Uint8List],
+  //   subs: [ {id, shape, colour, clarity, shade, pcs, wt, images:[Uint8List]} ],
   //   status: 'captured' | 'estimated',
   //   yieldPct, pricePerCt, marginPct,     ← estimate team
   // }
   static final Map<String, Map<String, dynamic>> captures = {};
+
+  static List<Map<String, dynamic>> subsOf(String lotId) =>
+      ((captures[lotId]?['subs'] as List?) ?? const [])
+          .cast<Map<String, dynamic>>();
 
   /// Per-lot Will-Bid override set on the phone (lotId → true/false). Falls back
   /// to the lot's published willBid flag when the buyer hasn't touched it.
@@ -262,13 +264,46 @@ class MockData {
   static bool isCaptured(String lotId) => captures.containsKey(lotId);
   static bool isEstimated(String lotId) => captureStatus(lotId) == 'estimated';
 
-  static Uint8List? firstPhoto(String lotId) {
-    final imgs = captures[lotId]?['images'] as List?;
-    return (imgs != null && imgs.isNotEmpty) ? imgs.first as Uint8List : null;
+  /// All captured photos across the lot's subs (for the estimate viewer).
+  static List<Uint8List> allPhotos(String lotId) {
+    final out = <Uint8List>[];
+    for (final s in subsOf(lotId)) {
+      final imgs = s['images'] as List?;
+      if (imgs != null) out.addAll(imgs.cast<Uint8List>());
+    }
+    return out;
   }
 
-  static int photoCount(String lotId) =>
-      (captures[lotId]?['images'] as List?)?.length ?? 0;
+  static Uint8List? firstPhoto(String lotId) {
+    final all = allPhotos(lotId);
+    return all.isEmpty ? null : all.first;
+  }
+
+  static int photoCount(String lotId) => allPhotos(lotId).length;
+
+  /// A short grade summary of the subs (e.g. "OVL FVY VS +2 more").
+  static String gradeSummary(String lotId) {
+    final subs = subsOf(lotId);
+    if (subs.isEmpty) return '';
+    String g(Map s) => [s['shape'], s['colour'], s['clarity']]
+        .where((x) => (x as String?)?.isNotEmpty ?? false)
+        .join(' ');
+    final first = g(subs.first);
+    return subs.length > 1 ? '$first +${subs.length - 1} more' : first;
+  }
+
+  // ── Reconcile: Σ split pcs / wt vs the lot's published pcs / wt ──────
+  static int subPcs(String lotId) =>
+      subsOf(lotId).fold(0, (n, s) => n + ((s['pcs'] as num?)?.toInt() ?? 0));
+  static double subWt(String lotId) =>
+      subsOf(lotId).fold(0.0, (w, s) => w + ((s['wt'] as num?)?.toDouble() ?? 0));
+
+  static bool isReconciled(Lot lot) {
+    if (subsOf(lot.id).isEmpty) return false;
+    final pcsOk = subPcs(lot.id) == lot.publishedPieces;
+    final wtOk = (subWt(lot.id) - lot.publishedCarats).abs() < 0.05;
+    return pcsOk && wtOk;
+  }
 
   static List<Lot> capturedLots(String tenderId) => lotsForTender(tenderId)
       .where((l) => captureStatus(l.id) == 'captured')

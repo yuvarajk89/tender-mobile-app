@@ -3,30 +3,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:uuid/uuid.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/image_utils.dart';
 import '../../../data/mock/mock_data.dart';
 import '../../../data/persistence/local_store.dart';
-import '../../settings/presentation/prefs_providers.dart';
 import '../domain/lot.dart';
 import 'lot_providers.dart';
 
 /// ============================================================================
-/// LOT CAPTURE — the buyer's fast at-the-table screen.
+/// LOT CAPTURE — split a lot into SUBS.
 ///
-/// The lot already has its stone count + weight from the PDF, so the buyer does
-/// NOT add stones. They just record what they see:
-///   • photos / videos
-///   • grade: Shape · Colour · Clarity  (tap to pick)
-///   • optional notes
-/// Save → the lot is marked "captured" and handed to the ESTIMATE team, who do
-/// the yield / break-even / bid maths on the Estimate tab. No bid maths here.
+/// A lot has published pieces + weight (from the PDF). The buyer splits it into
+/// one or more subs — each with a grade (Shape/Colour/Clarity + free "shade"
+/// note), its own pieces, weight, and photos. The split pcs/wt must reconcile to
+/// the published totals (a warning shows if not; save is still allowed).
+/// Save → the lot moves to the Estimate team.
 /// ============================================================================
 
-// theme-aware palette
+const _uuid = Uuid();
+
 class _P {
-  static late Color bg, surface, card, input, accent, accentB,
-      accentGs, ok, info, t1, t2, t3, border, borderA, onAccent;
+  static late Color bg, surface, card, input, accent, accentB, accentGs, ok,
+      err, warn, info, t1, t2, t3, border, borderA, onAccent;
   static void apply(Brightness b) {
     final d = b == Brightness.dark;
     bg = d ? const Color(0xFF0E1017) : const Color(0xFFF6F7FB);
@@ -37,6 +36,8 @@ class _P {
     accentB = d ? const Color(0xFFF0C95E) : const Color(0xFF8A6A22);
     accentGs = d ? const Color(0x40D4A853) : const Color(0x33A9812E);
     ok = d ? const Color(0xFF2DD4A0) : const Color(0xFF13A15A);
+    err = d ? const Color(0xFFF87171) : const Color(0xFFD23B3B);
+    warn = d ? const Color(0xFFFBBF24) : const Color(0xFFC9820A);
     info = d ? const Color(0xFF60A5FA) : const Color(0xFF2743B0);
     t1 = d ? const Color(0xFFE8E6E3) : const Color(0xFF161A2B);
     t2 = d ? const Color(0xFF9AA0B4) : const Color(0xFF5B627A);
@@ -56,6 +57,63 @@ const _slots = ['shape', 'colour', 'clarity'];
 const _slotLabels = {'shape': 'Shape', 'colour': 'Colour', 'clarity': 'Clarity'};
 List<String> _optionsFor(String s) => MockData.masterList(s);
 
+/// A split sub (mutable, in-memory while editing).
+class _Sub {
+  _Sub({
+    String? id,
+    this.shape = '',
+    this.colour = '',
+    this.clarity = '',
+    this.shade = '',
+    this.pcs = 0,
+    this.wt = 0,
+    this.yieldPct = 0,
+    this.pricePerCt = 0,
+    List<Uint8List>? images,
+  })  : id = id ?? _uuid.v4(),
+        images = images ?? [];
+
+  final String id;
+  String shape, colour, clarity, shade;
+  int pcs;
+  double wt;
+  double yieldPct;    // on-spot expert estimate (optional)
+  double pricePerCt;  // $/polished ct (optional)
+  List<Uint8List> images;
+
+  String get grade =>
+      [shape, colour, clarity].where((s) => s.isNotEmpty).join(' ');
+
+  double get polishWt => wt * yieldPct / 100;
+  double get value => polishWt * pricePerCt;
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'shape': shape,
+        'colour': colour,
+        'clarity': clarity,
+        'shade': shade,
+        'pcs': pcs,
+        'wt': wt,
+        'yieldPct': yieldPct,
+        'pricePerCt': pricePerCt,
+        'images': images,
+      };
+
+  factory _Sub.fromMap(Map<String, dynamic> m) => _Sub(
+        id: m['id'] as String?,
+        shape: m['shape'] as String? ?? '',
+        colour: m['colour'] as String? ?? '',
+        clarity: m['clarity'] as String? ?? '',
+        shade: m['shade'] as String? ?? '',
+        pcs: (m['pcs'] as num?)?.toInt() ?? 0,
+        wt: (m['wt'] as num?)?.toDouble() ?? 0,
+        yieldPct: (m['yieldPct'] as num?)?.toDouble() ?? 0,
+        pricePerCt: (m['pricePerCt'] as num?)?.toDouble() ?? 0,
+        images: (m['images'] as List?)?.cast<Uint8List>() ?? [],
+      );
+}
+
 class PocLotEntryPage extends ConsumerStatefulWidget {
   const PocLotEntryPage({super.key, required this.tenderId, required this.lotId});
   final String tenderId;
@@ -66,64 +124,24 @@ class PocLotEntryPage extends ConsumerStatefulWidget {
 }
 
 class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
-  String _shape = '', _colour = '', _clarity = '';
-  final _notes = TextEditingController();
-  final List<Uint8List> _images = [];
+  final List<_Sub> _subs = [];
   bool _seeded = false;
-
-  @override
-  void dispose() {
-    _notes.dispose();
-    super.dispose();
-  }
 
   void _seed() {
     if (_seeded) return;
     _seeded = true;
-    final c = MockData.capture(widget.lotId);
-    if (c != null) {
-      _shape = c['shape'] ?? '';
-      _colour = c['colour'] ?? '';
-      _clarity = c['clarity'] ?? '';
-      _notes.text = c['notes'] ?? '';
-      final imgs = c['images'] as List?;
-      if (imgs != null) _images.addAll(imgs.cast<Uint8List>());
+    for (final s in MockData.subsOf(widget.lotId)) {
+      _subs.add(_Sub.fromMap(s));
     }
   }
 
-  String _slotVal(String s) =>
-      switch (s) { 'shape' => _shape, 'colour' => _colour, 'clarity' => _clarity, _ => '' };
-  void _setSlot(String s, String v) => setState(() {
-        if (s == 'shape') _shape = v;
-        if (s == 'colour') _colour = v;
-        if (s == 'clarity') _clarity = v;
-      });
-
-  Future<void> _addFromCamera() async {
-    final b = await captureFromCamera(context);
-    if (b == null) return;
-    setState(() => _images.add(b));
-  }
-
-  Future<void> _addFromGallery() async {
-    final list = await pickMultiFromGallery(context);
-    if (list.isEmpty) return;
-    setState(() => _images.addAll(list));
-    if (mounted && list.length > 1) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${list.length} photos added'),
-          duration: const Duration(milliseconds: 1000)));
-    }
-  }
+  int get _usedPcs => _subs.fold(0, (n, s) => n + s.pcs);
+  double get _usedWt => _subs.fold(0.0, (w, s) => w + s.wt);
 
   void _save({required bool toEstimate}) {
     final existing = MockData.captures[widget.lotId];
     MockData.captures[widget.lotId] = {
-      'shape': _shape,
-      'colour': _colour,
-      'clarity': _clarity,
-      'notes': _notes.text.trim(),
-      'images': List<Uint8List>.of(_images),
+      'subs': _subs.map((s) => s.toMap()).toList(),
       'status': toEstimate ? 'captured' : (existing?['status'] ?? 'captured'),
       'yieldPct': existing?['yieldPct'] ?? 0.0,
       'pricePerCt': existing?['pricePerCt'] ?? 0.0,
@@ -132,12 +150,32 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
     LocalStore.I.persistCaptures();
     ref.invalidate(lotsProvider(widget.tenderId));
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(toEstimate
-          ? 'Saved — moved to Estimate team'
-          : 'Saved'),
+      content: Text(toEstimate ? 'Saved — moved to Estimate' : 'Draft saved'),
       duration: const Duration(milliseconds: 1200),
     ));
     context.go('/tender/${widget.tenderId}');
+  }
+
+  Future<void> _editSub(Lot lot, {_Sub? existing}) async {
+    // suggest remaining pcs/wt for a new sub
+    final sub = existing ??
+        _Sub(
+          pcs: (lot.publishedPieces - _usedPcs).clamp(0, lot.publishedPieces),
+          wt: (lot.publishedCarats - _usedWt).clamp(0, lot.publishedCarats).toDouble(),
+        );
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _P.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _SubEditor(sub: sub),
+    );
+    if (saved == true) {
+      setState(() {
+        if (existing == null) _subs.add(sub);
+      });
+    }
   }
 
   @override
@@ -145,6 +183,7 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
     _P.apply(Theme.of(context).brightness);
     _seed();
     final lot = ref.watch(lotProvider(widget.lotId)).valueOrNull;
+    final hasAny = _subs.isNotEmpty;
 
     return Scaffold(
       backgroundColor: _P.bg,
@@ -161,73 +200,59 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
         actions: [
           if (lot != null)
             TextButton(
-              onPressed: (_shape.isNotEmpty ||
-                      _colour.isNotEmpty ||
-                      _clarity.isNotEmpty ||
-                      _images.isNotEmpty)
-                  ? () => _save(toEstimate: false)
-                  : null,
+              onPressed: hasAny ? () => _save(toEstimate: false) : null,
               child: Text('Draft', style: _P.ui(size: 13, w: FontWeight.w600, c: _P.t2)),
             ),
         ],
       ),
       body: lot == null
           ? const Center(child: Text('Lot not found'))
-          : Column(
-              children: [
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(14),
-                    children: [
-                      _publishedCard(lot),
-                      const SizedBox(height: 14),
-                      _sectionLabel('PHOTOS / VIDEOS'),
-                      const SizedBox(height: 8),
-                      _mediaSection(),
-                      const SizedBox(height: 18),
-                      _sectionLabel('GRADE'),
-                      const SizedBox(height: 8),
-                      if (ref.watch(gradeStyleProvider) == GradeStyle.tabbed)
-                        _gradeFields()
-                      else
-                        for (final s in _slots) _gradeRow(s),
-                      const SizedBox(height: 14),
-                      _sectionLabel('NOTES (optional)'),
-                      const SizedBox(height: 8),
-                      _notesField(),
-                      if (_images.isNotEmpty) ...[
-                        const SizedBox(height: 18),
-                        _photoStrip(),
-                      ],
+          : Column(children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(14),
+                  children: [
+                    _publishedCard(lot),
+                    const SizedBox(height: 12),
+                    _reconcileCard(lot),
+                    const SizedBox(height: 16),
+                    _sectionLabel('SPLITS  (${_subs.length})'),
+                    const SizedBox(height: 8),
+                    if (_subs.isEmpty)
+                      _emptyHint()
+                    else
+                      for (var i = 0; i < _subs.length; i++) _subCard(lot, i),
+                    const SizedBox(height: 12),
+                    _addSplitButton(lot),
+                    if (_subs.any((s) => s.value > 0)) ...[
                       const SizedBox(height: 16),
+                      _bidSummary(lot),
                     ],
-                  ),
+                    const SizedBox(height: 16),
+                  ],
                 ),
-                _bottomSaveBar(),
-              ],
-            ),
+              ),
+              _bottomSaveBar(lot, hasAny),
+            ]),
     );
   }
 
   Widget _sectionLabel(String t) =>
       Text(t, style: _P.mono(size: 10, w: FontWeight.w700, c: _P.t3));
 
-  // Read-only reference from the PDF (stone count is already known).
   Widget _publishedCard(Lot lot) {
     final status = MockData.captureStatus(lot.id);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _P.accentGs,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _P.borderA),
-      ),
+          color: _P.accentGs,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _P.borderA)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(
-            child: Text(lot.lotName,
-                style: _P.mono(size: 15, w: FontWeight.w700, c: _P.accentB)),
-          ),
+              child: Text(lot.lotName,
+                  style: _P.mono(size: 15, w: FontWeight.w700, c: _P.accentB))),
           if (lot.willBid) _pill('WILL BID', _P.accent),
           if (status != 'todo') ...[
             const SizedBox(width: 6),
@@ -245,306 +270,194 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
     );
   }
 
-  Widget _fact(String k, String v) => Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(k, style: _P.mono(size: 8, w: FontWeight.w700, c: _P.t3)),
-          const SizedBox(height: 2),
-          Text(v, style: _P.mono(size: 14, w: FontWeight.w700, c: _P.t1)),
+  // Reconcile bar: Σ split pcs / wt vs published, with match/mismatch.
+  Widget _reconcileCard(Lot lot) {
+    final pcsOk = _usedPcs == lot.publishedPieces;
+    final wtOk = (_usedWt - lot.publishedCarats).abs() < 0.05;
+    final allOk = pcsOk && wtOk && _subs.isNotEmpty;
+    final leftPcs = lot.publishedPieces - _usedPcs;
+    final leftWt = lot.publishedCarats - _usedWt;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+          color: _P.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: allOk ? _P.ok : _P.border)),
+      child: Column(children: [
+        Row(children: [
+          Text('RECONCILE', style: _P.mono(size: 10, w: FontWeight.w700, c: _P.t3)),
+          const Spacer(),
+          if (_subs.isNotEmpty)
+            Row(children: [
+              Icon(allOk ? Icons.check_circle : Icons.warning_amber_rounded,
+                  size: 15, color: allOk ? _P.ok : _P.warn),
+              const SizedBox(width: 4),
+              Text(allOk ? 'Matched' : 'Not matched',
+                  style: _P.mono(size: 11, w: FontWeight.w700,
+                      c: allOk ? _P.ok : _P.warn)),
+            ]),
         ]),
-      );
-
-  Widget _pill(String t, Color c) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-            color: c.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: c.withOpacity(0.5))),
-        child: Text(t, style: _P.mono(size: 9, w: FontWeight.w700, c: c)),
-      );
-
-  Widget _mediaSection() {
-    return Row(children: [
-      Expanded(child: _bigBtn(Icons.photo_camera_outlined, 'Camera', _addFromCamera)),
-      const SizedBox(width: 10),
-      Expanded(child: _bigBtn(Icons.photo_library_outlined, 'Gallery', _addFromGallery)),
-    ]);
+        const SizedBox(height: 10),
+        _reconcileRow('Pieces', '$_usedPcs', '${lot.publishedPieces}',
+            pcsOk, leftPcs == 0 ? null : '${leftPcs.abs()} ${leftPcs > 0 ? 'left' : 'over'}'),
+        const SizedBox(height: 8),
+        _reconcileRow('Weight', Fmt.carats(_usedWt), Fmt.carats(lot.publishedCarats),
+            wtOk, leftWt.abs() < 0.05 ? null : '${Fmt.carats(leftWt.abs())} ${leftWt > 0 ? 'left' : 'over'}'),
+      ]),
+    );
   }
 
-  /// Compact clickable thumbnail strip shown just above Save — tap a thumb to
-  /// preview (zoom), ✕ to remove.
-  Widget _photoStrip() {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _sectionLabel('${_images.length} PHOTO${_images.length == 1 ? '' : 'S'} — tap to preview'),
-      const SizedBox(height: 8),
-      SizedBox(
-        height: 64,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: _images.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 8),
-          itemBuilder: (_, i) => ImageThumb(
-              images: _images,
-              index: i,
-              size: 60,
-              onDelete: () => setState(() => _images.removeAt(i))),
+  Widget _reconcileRow(String label, String used, String total, bool ok, String? left) {
+    final ratio = double.tryParse(total.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 1;
+    final u = double.tryParse(used.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+    final frac = ratio > 0 ? (u / ratio).clamp(0.0, 1.0) : 0.0;
+    return Row(children: [
+      SizedBox(width: 54, child: Text(label, style: _P.ui(size: 12, c: _P.t2))),
+      const SizedBox(width: 8),
+      Expanded(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(50),
+          child: LinearProgressIndicator(
+            value: frac,
+            minHeight: 8,
+            backgroundColor: _P.input,
+            valueColor: AlwaysStoppedAnimation(ok ? _P.ok : _P.accent),
+          ),
         ),
       ),
+      const SizedBox(width: 10),
+      Text('$used / $total',
+          style: _P.mono(size: 12, w: FontWeight.w700, c: ok ? _P.ok : _P.t1)),
+      if (left != null) ...[
+        const SizedBox(width: 6),
+        Text('($left)', style: _P.mono(size: 10, c: _P.warn)),
+      ],
     ]);
   }
 
-  Widget _bigBtn(IconData ic, String label, VoidCallback onTap) => GestureDetector(
-        onTap: onTap,
+  Widget _subCard(Lot lot, int i) {
+    final s = _subs[i];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: () => _editSub(lot, existing: s),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
               color: _P.card,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: _P.border)),
-          child: Column(children: [
-            Icon(ic, color: _P.accent, size: 26),
-            const SizedBox(height: 6),
-            Text(label, style: _P.ui(size: 12, w: FontWeight.w600, c: _P.t2)),
+          child: Row(children: [
+            CircleAvatar(
+              radius: 13,
+              backgroundColor: _P.accentGs,
+              child: Text('${i + 1}', style: _P.mono(size: 11, c: _P.accent)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(s.grade.isEmpty ? '(no grade)' : s.grade,
+                    style: _P.mono(size: 14, w: FontWeight.w700, c: _P.accentB)),
+                const SizedBox(height: 2),
+                Row(children: [
+                  Text('${s.pcs} pc · ${Fmt.carats(s.wt)}',
+                      style: _P.mono(size: 11, c: _P.t2)),
+                  if (s.shade.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Text('· ${s.shade}', style: _P.ui(size: 11, c: _P.t3)),
+                  ],
+                  if (s.images.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Text('· 📷${s.images.length}', style: _P.mono(size: 11, c: _P.info)),
+                  ],
+                ]),
+                if (s.yieldPct > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                        '${Fmt.percent(s.yieldPct)} @ ${Fmt.money(s.pricePerCt)} · ${Fmt.money(s.value)}',
+                        style: _P.mono(size: 10, c: _P.ok)),
+                  ),
+              ]),
+            ),
+            IconButton(
+              icon: Icon(Icons.delete_outline, color: _P.err, size: 20),
+              onPressed: () => setState(() => _subs.removeAt(i)),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  // Lot bid summary from the on-spot estimates (Σ over subs). Margin fixed 15%
+  // here; the estimate team can refine on the Estimate tab.
+  Widget _bidSummary(Lot lot) {
+    final polish = _subs.fold(0.0, (p, s) => p + s.polishWt);
+    final value = _subs.fold(0.0, (v, s) => v + s.value);
+    final rough = _usedWt > 0 ? _usedWt : lot.publishedCarats;
+    final breakEven = rough > 0 ? value / rough : 0.0;
+    const margin = 15;
+    final bid = breakEven * (1 - margin / 100);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: const Color(0xFF16204A),
+          borderRadius: BorderRadius.circular(14)),
+      child: Column(children: [
+        _sumRow('Polish wt', Fmt.carats(polish)),
+        _sumRow('Polished value', Fmt.money(value)),
+        _sumRow('Break-even \$/ct', Fmt.money(breakEven)),
+        Divider(color: Colors.white24, height: 20),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text('BID \$/ct  −15%',
+              style: _P.mono(size: 10, w: FontWeight.w700, c: _P.accentB)),
+          Text(Fmt.money(bid),
+              style: _P.mono(size: 24, w: FontWeight.w800, c: _P.accentB)),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _sumRow(String k, String v) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(k, style: _P.ui(size: 12, c: Colors.white70)),
+          Text(v, style: _P.mono(size: 14, w: FontWeight.w700, c: Colors.white)),
+        ]),
+      );
+
+  Widget _emptyHint() => Container(
+        padding: const EdgeInsets.all(20),
+        alignment: Alignment.center,
+        child: Text('No splits yet — add one below.',
+            style: _P.ui(size: 13, c: _P.t3)),
+      );
+
+  Widget _addSplitButton(Lot lot) => GestureDetector(
+        onTap: () => _editSub(lot),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _P.accentGs,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _P.borderA),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.add, color: _P.accent, size: 20),
+            const SizedBox(width: 6),
+            Text('Add split', style: _P.ui(size: 14, w: FontWeight.w700, c: _P.accent)),
           ]),
         ),
       );
 
-  // A grade row: label + horizontal chips (tap to select). Fast, no typing.
-  Widget _gradeRow(String slot) {
-    final sel = _slotVal(slot);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Text(_slotLabels[slot]!, style: _P.ui(size: 13, w: FontWeight.w600, c: _P.t2)),
-          const SizedBox(width: 8),
-          if (sel.isNotEmpty)
-            Text(sel, style: _P.mono(size: 13, w: FontWeight.w700, c: _P.accent)),
-          const Spacer(),
-          if (sel.isNotEmpty)
-            GestureDetector(
-              onTap: () => _setSlot(slot, ''),
-              child: Text('clear', style: _P.ui(size: 11, c: _P.t3)),
-            ),
-        ]),
-        const SizedBox(height: 6),
-        SizedBox(
-          height: 44,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              for (final code in _optionsFor(slot))
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    onTap: () => _setSlot(slot, sel == code ? '' : code),
-                    child: Container(
-                      alignment: Alignment.center,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: sel == code ? _P.accentGs : _P.card,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                            color: sel == code ? _P.accent : _P.border,
-                            width: sel == code ? 1.5 : 1),
-                      ),
-                      child: Text(code,
-                          style: _P.mono(
-                              size: 14,
-                              w: FontWeight.w600,
-                              c: sel == code ? _P.accentB : _P.t1)),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ]),
-    );
-  }
-
-  // ── "Yesterday" style: three tappable fields → one tabbed picker sheet ──
-  static const _slotIcons = {
-    'shape': Icons.category_outlined,
-    'colour': Icons.palette_outlined,
-    'clarity': Icons.blur_on_outlined,
-  };
-
-  Widget _gradeFields() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _P.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _P.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: [
-        for (var i = 0; i < _slots.length; i++) ...[
-          if (i > 0) Divider(height: 1, color: _P.border),
-          _gradeFieldRow(_slots[i]),
-        ],
-      ]),
-    );
-  }
-
-  Widget _gradeFieldRow(String s) {
-    final val = _slotVal(s);
-    final set = val.isNotEmpty;
-    return InkWell(
-      onTap: () => _openTabbedPicker(s),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        child: Row(children: [
-          Container(
-            width: 34, height: 34,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-                color: _P.accentGs, borderRadius: BorderRadius.circular(9)),
-            child: Icon(_slotIcons[s], size: 18, color: _P.accent),
-          ),
-          const SizedBox(width: 12),
-          Text(_slotLabels[s]!, style: _P.ui(size: 14, w: FontWeight.w600, c: _P.t1)),
-          const Spacer(),
-          if (set)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: _P.accentGs,
-                borderRadius: BorderRadius.circular(50),
-              ),
-              child: Text(val, style: _P.mono(size: 13, w: FontWeight.w700, c: _P.accentB)),
-            )
-          else
-            Text('Select', style: _P.ui(size: 13, c: _P.t3)),
-          const SizedBox(width: 4),
-          Icon(Icons.chevron_right, color: _P.t3, size: 20),
-        ]),
-      ),
-    );
-  }
-
-  void _openTabbedPicker(String startSlot) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: _P.surface,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) {
-        String tab = startSlot;
-        return StatefulBuilder(builder: (ctx, setSheet) {
-          return ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                  width: 36, height: 4,
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(color: _P.border, borderRadius: BorderRadius.circular(2))),
-              // tabs
-              Row(children: _slots.map((s) {
-                final active = tab == s;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => setSheet(() => tab = s),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        border: Border(bottom: BorderSide(
-                            color: active ? _P.accent : _P.border,
-                            width: active ? 2 : 1)),
-                      ),
-                      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        Text(_slotLabels[s]!,
-                            style: _P.ui(size: 12, w: FontWeight.w600,
-                                c: active ? _P.accentB : _P.t3)),
-                        if (_slotVal(s).isNotEmpty) ...[
-                          const SizedBox(width: 4),
-                          Container(width: 6, height: 6,
-                              decoration: BoxDecoration(color: _P.ok, shape: BoxShape.circle)),
-                        ],
-                      ]),
-                    ),
-                  ),
-                );
-              }).toList()),
-              // vertical list of options
-              Flexible(
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                  itemCount: _optionsFor(tab).length,
-                  itemBuilder: (_, i) {
-                    final code = _optionsFor(tab)[i];
-                    final sel = _slotVal(tab) == code;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: GestureDetector(
-                        onTap: () {
-                          _setSlot(tab, sel ? '' : code);
-                          final next = _slots
-                              .where((s) => _slotVal(s).isEmpty && s != tab)
-                              .toList();
-                          if (next.isNotEmpty) {
-                            setSheet(() => tab = next.first);
-                          } else {
-                            Navigator.pop(ctx);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: sel ? _P.accentGs : _P.card,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: sel ? _P.accent : _P.border,
-                                width: sel ? 1.5 : 1),
-                          ),
-                          child: Row(children: [
-                            Text(code,
-                                style: _P.mono(size: 15, w: FontWeight.w600,
-                                    c: sel ? _P.accentB : _P.t1)),
-                            const Spacer(),
-                            if (sel) Icon(Icons.check_circle, color: _P.accent, size: 20),
-                          ]),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ]),
-          );
-        });
-      },
-    );
-  }
-
-  Widget _notesField() => TextField(
-        controller: _notes,
-        maxLines: 2,
-        style: _P.ui(size: 14, c: _P.t1),
-        decoration: InputDecoration(
-          hintText: 'e.g. coating, inclusion, "as our 6.72 vivid"…',
-          hintStyle: _P.ui(size: 13, c: _P.t3),
-          filled: true,
-          fillColor: _P.input,
-          contentPadding: const EdgeInsets.all(12),
-          enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: _P.border)),
-          focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: _P.accent)),
-        ),
-      );
-
-  /// Pinned bottom bar so Save is ALWAYS reachable without scrolling (fast work).
-  Widget _bottomSaveBar() {
-    final hasAny =
-        _shape.isNotEmpty || _colour.isNotEmpty || _clarity.isNotEmpty || _images.isNotEmpty;
+  Widget _bottomSaveBar(Lot lot, bool hasAny) {
     return Container(
       decoration: BoxDecoration(
         color: _P.surface,
         border: Border(top: BorderSide(color: _P.border)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, -2))],
       ),
       child: SafeArea(
         top: false,
@@ -570,4 +483,242 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
       ),
     );
   }
+
+  Widget _pill(String t, Color c) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+            color: c.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: c.withOpacity(0.5))),
+        child: Text(t, style: _P.mono(size: 9, w: FontWeight.w700, c: c)),
+      );
+
+  Widget _fact(String k, String v) => Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(k, style: _P.mono(size: 8, w: FontWeight.w700, c: _P.t3)),
+          const SizedBox(height: 2),
+          Text(v, style: _P.mono(size: 14, w: FontWeight.w700, c: _P.t1)),
+        ]),
+      );
+}
+
+/// Editor sheet for one split sub: grade chips + shade + pcs/wt + photos.
+class _SubEditor extends StatefulWidget {
+  const _SubEditor({required this.sub});
+  final _Sub sub;
+
+  @override
+  State<_SubEditor> createState() => _SubEditorState();
+}
+
+class _SubEditorState extends State<_SubEditor> {
+  late final _pcs = TextEditingController(text: widget.sub.pcs == 0 ? '' : '${widget.sub.pcs}');
+  late final _wt = TextEditingController(text: widget.sub.wt == 0 ? '' : '${widget.sub.wt}');
+  late final _shade = TextEditingController(text: widget.sub.shade);
+  late final _yield = TextEditingController(text: widget.sub.yieldPct == 0 ? '' : '${widget.sub.yieldPct}');
+  late final _price = TextEditingController(text: widget.sub.pricePerCt == 0 ? '' : '${widget.sub.pricePerCt}');
+
+  @override
+  void dispose() {
+    _pcs.dispose();
+    _wt.dispose();
+    _shade.dispose();
+    _yield.dispose();
+    _price.dispose();
+    super.dispose();
+  }
+
+  String _val(String s) => switch (s) {
+        'shape' => widget.sub.shape,
+        'colour' => widget.sub.colour,
+        'clarity' => widget.sub.clarity,
+        _ => '',
+      };
+  void _set(String s, String v) => setState(() {
+        if (s == 'shape') widget.sub.shape = v;
+        if (s == 'colour') widget.sub.colour = v;
+        if (s == 'clarity') widget.sub.clarity = v;
+      });
+
+  Future<void> _camera() async {
+    final b = await captureFromCamera(context);
+    if (b != null) setState(() => widget.sub.images.add(b));
+  }
+
+  Future<void> _gallery() async {
+    final list = await pickMultiFromGallery(context);
+    if (list.isNotEmpty) setState(() => widget.sub.images.addAll(list));
+  }
+
+  void _commit() {
+    widget.sub.pcs = int.tryParse(_pcs.text.trim()) ?? 0;
+    widget.sub.wt = double.tryParse(_wt.text.trim()) ?? 0;
+    widget.sub.shade = _shade.text.trim();
+    widget.sub.yieldPct = double.tryParse(_yield.text.trim()) ?? 0;
+    widget.sub.pricePerCt = double.tryParse(_price.text.trim()) ?? 0;
+    Navigator.pop(context, true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16, right: 16, top: 12,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(
+            child: Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(color: _P.border, borderRadius: BorderRadius.circular(2))),
+          ),
+          Text('Split', style: _P.ui(size: 16, w: FontWeight.w700, c: _P.t1)),
+          const SizedBox(height: 12),
+          for (final s in _slots) _gradeRow(s),
+          const SizedBox(height: 4),
+          Text('SHADE (optional)', style: _P.mono(size: 10, w: FontWeight.w700, c: _P.t3)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _shade,
+            style: _P.ui(size: 14, c: _P.t1),
+            decoration: _dec('e.g. MB, light, coated'),
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: _numField('Pieces', _pcs, whole: true)),
+            const SizedBox(width: 12),
+            Expanded(child: _numField('Rough wt (ct)', _wt)),
+          ]),
+          const SizedBox(height: 12),
+          Text('ON-SPOT ESTIMATE (optional)',
+              style: _P.mono(size: 10, w: FontWeight.w700, c: _P.t3)),
+          const SizedBox(height: 6),
+          Row(children: [
+            Expanded(child: _numField('Yield %', _yield)),
+            const SizedBox(width: 12),
+            Expanded(child: _numField('\$ / polished ct', _price)),
+          ]),
+          const SizedBox(height: 14),
+          Text('PHOTOS', style: _P.mono(size: 10, w: FontWeight.w700, c: _P.t3)),
+          const SizedBox(height: 6),
+          Row(children: [
+            Expanded(child: _mediaBtn(Icons.photo_camera_outlined, 'Camera', _camera)),
+            const SizedBox(width: 10),
+            Expanded(child: _mediaBtn(Icons.photo_library_outlined, 'Gallery', _gallery)),
+          ]),
+          if (widget.sub.images.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 64,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: widget.sub.images.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (_, i) => ImageThumb(
+                    images: widget.sub.images, index: i, size: 60,
+                    onDelete: () => setState(() => widget.sub.images.removeAt(i))),
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton(
+              onPressed: _commit,
+              style: FilledButton.styleFrom(
+                  backgroundColor: _P.accent, foregroundColor: _P.onAccent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              child: Text('Add split', style: _P.ui(size: 14, w: FontWeight.w700, c: _P.onAccent)),
+            ),
+          ),
+          const SizedBox(height: 6),
+        ]),
+      ),
+    );
+  }
+
+  Widget _gradeRow(String s) {
+    final val = _val(s);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(_slotLabels[s]!, style: _P.ui(size: 13, w: FontWeight.w600, c: _P.t2)),
+          if (val.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Text(val, style: _P.mono(size: 13, w: FontWeight.w700, c: _P.accent)),
+          ],
+        ]),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 42,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _optionsFor(s).length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final code = _optionsFor(s)[i];
+              final sel = val == code;
+              return GestureDetector(
+                onTap: () => _set(s, sel ? '' : code),
+                child: Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: sel ? _P.accentGs : _P.card,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: sel ? _P.accent : _P.border, width: sel ? 1.5 : 1),
+                  ),
+                  child: Text(code,
+                      style: _P.mono(size: 14, w: FontWeight.w600, c: sel ? _P.accentB : _P.t1)),
+                ),
+              );
+            },
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _numField(String label, TextEditingController c, {bool whole = false}) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label.toUpperCase(), style: _P.mono(size: 9, w: FontWeight.w700, c: _P.t3)),
+      const SizedBox(height: 4),
+      TextField(
+        controller: c,
+        keyboardType: TextInputType.numberWithOptions(decimal: !whole),
+        style: _P.mono(size: 15, c: _P.t1),
+        decoration: _dec(whole ? '0' : '0.00'),
+      ),
+    ]);
+  }
+
+  Widget _mediaBtn(IconData ic, String label, VoidCallback onTap) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+              color: _P.card, borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _P.border)),
+          child: Column(children: [
+            Icon(ic, color: _P.accent, size: 22),
+            const SizedBox(height: 4),
+            Text(label, style: _P.ui(size: 11, w: FontWeight.w600, c: _P.t2)),
+          ]),
+        ),
+      );
+
+  InputDecoration _dec(String hint) => InputDecoration(
+        isDense: true,
+        filled: true,
+        fillColor: _P.input,
+        hintText: hint,
+        hintStyle: _P.ui(size: 13, c: _P.t3),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: _P.border)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: _P.accent)),
+      );
 }

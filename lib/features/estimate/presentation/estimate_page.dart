@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
@@ -71,9 +70,7 @@ class _EstimateTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = MockData.capture(lot.id)!;
-    final grade = [c['shape'], c['colour'], c['clarity']]
-        .where((s) => (s as String).isNotEmpty)
-        .join(' ');
+    final grade = MockData.gradeSummary(lot.id);
     final yieldPct = (c['yieldPct'] as num?)?.toDouble() ?? 0;
     final priceCt = (c['pricePerCt'] as num?)?.toDouble() ?? 0;
     final margin = (c['marginPct'] as num?)?.toDouble() ?? 15;
@@ -293,7 +290,7 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
   // Captured photos — the estimate team taps to view HQ, zoom & rotate to judge
   // size / shape / colour before estimating.
   Widget _capturedPhotos() {
-    final imgs = (_c['images'] as List?)?.cast<Uint8List>() ?? const [];
+    final imgs = MockData.allPhotos(widget.lot.id);
     if (imgs.isEmpty) {
       return Padding(
         padding: const EdgeInsets.only(top: AppSpacing.md),

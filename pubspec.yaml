@@ -1,7 +1,7 @@
 name: donda_diamond
 description: "Donda Diamond ERP — rough-diamond tender evaluation (mobile/tablet/web)"
 publish_to: 'none'
-version: 0.3.8+26   # estimate: show captured photos + rotate in viewer
+version: 0.4.0+27   # lot split into subs + on-spot yield/amount + reconcile + bid summary
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

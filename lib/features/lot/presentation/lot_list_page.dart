@@ -144,8 +144,11 @@ class _LotTile extends StatelessWidget {
   final VoidCallback onToggleWillBid;
 
   (Color, String) get _status {
-    // Capture status drives the dot + label (todo → captured → estimated).
-    return switch (MockData.captureStatus(lot.id)) {
+    final st = MockData.captureStatus(lot.id);
+    if (st != 'todo' && !MockData.isReconciled(lot)) {
+      return (AppColors.warning, '⚠ not reconciled');
+    }
+    return switch (st) {
       'estimated' => (AppColors.success, 'Estimated'),
       'captured' => (AppColors.info, 'In estimate'),
       _ => (AppColors.statusPending, 'To capture'),
