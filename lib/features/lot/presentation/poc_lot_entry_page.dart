@@ -363,34 +363,63 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
   }
 
   // ── "Yesterday" style: three tappable fields → one tabbed picker sheet ──
+  static const _slotIcons = {
+    'shape': Icons.category_outlined,
+    'colour': Icons.palette_outlined,
+    'clarity': Icons.blur_on_outlined,
+  };
+
   Widget _gradeFields() {
-    return Column(children: [
-      for (final s in _slots)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: GestureDetector(
-            onTap: () => _openTabbedPicker(s),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              decoration: BoxDecoration(
-                color: _P.card,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _P.border),
-              ),
-              child: Row(children: [
-                Text(_slotLabels[s]!, style: _P.ui(size: 13, w: FontWeight.w600, c: _P.t2)),
-                const Spacer(),
-                Text(_slotVal(s).isEmpty ? 'Select' : _slotVal(s),
-                    style: _slotVal(s).isEmpty
-                        ? _P.ui(size: 14, c: _P.t3)
-                        : _P.mono(size: 14, w: FontWeight.w700, c: _P.accent)),
-                const SizedBox(width: 6),
-                Icon(Icons.expand_more, color: _P.t3, size: 20),
-              ]),
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        color: _P.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _P.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: [
+        for (var i = 0; i < _slots.length; i++) ...[
+          if (i > 0) Divider(height: 1, color: _P.border),
+          _gradeFieldRow(_slots[i]),
+        ],
+      ]),
+    );
+  }
+
+  Widget _gradeFieldRow(String s) {
+    final val = _slotVal(s);
+    final set = val.isNotEmpty;
+    return InkWell(
+      onTap: () => _openTabbedPicker(s),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        child: Row(children: [
+          Container(
+            width: 34, height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+                color: _P.accentGs, borderRadius: BorderRadius.circular(9)),
+            child: Icon(_slotIcons[s], size: 18, color: _P.accent),
           ),
-        ),
-    ]);
+          const SizedBox(width: 12),
+          Text(_slotLabels[s]!, style: _P.ui(size: 14, w: FontWeight.w600, c: _P.t1)),
+          const Spacer(),
+          if (set)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _P.accentGs,
+                borderRadius: BorderRadius.circular(50),
+              ),
+              child: Text(val, style: _P.mono(size: 13, w: FontWeight.w700, c: _P.accentB)),
+            )
+          else
+            Text('Select', style: _P.ui(size: 13, c: _P.t3)),
+          const SizedBox(width: 4),
+          Icon(Icons.chevron_right, color: _P.t3, size: 20),
+        ]),
+      ),
+    );
   }
 
   void _openTabbedPicker(String startSlot) {
@@ -439,25 +468,44 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
               }).toList()),
               // vertical list of options
               Flexible(
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
                   itemCount: _optionsFor(tab).length,
-                  separatorBuilder: (_, __) => Divider(height: 1, color: _P.border),
                   itemBuilder: (_, i) {
                     final code = _optionsFor(tab)[i];
                     final sel = _slotVal(tab) == code;
-                    return ListTile(
-                      title: Text(code, style: _P.mono(size: 15, c: sel ? _P.accent : _P.t1)),
-                      trailing: sel ? Icon(Icons.check, color: _P.accent) : null,
-                      onTap: () {
-                        _setSlot(tab, sel ? '' : code);
-                        final next = _slots.where((s) => _slotVal(s).isEmpty && s != tab).toList();
-                        if (next.isNotEmpty) {
-                          setSheet(() => tab = next.first);
-                        } else {
-                          Navigator.pop(ctx);
-                        }
-                      },
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: GestureDetector(
+                        onTap: () {
+                          _setSlot(tab, sel ? '' : code);
+                          final next = _slots
+                              .where((s) => _slotVal(s).isEmpty && s != tab)
+                              .toList();
+                          if (next.isNotEmpty) {
+                            setSheet(() => tab = next.first);
+                          } else {
+                            Navigator.pop(ctx);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: sel ? _P.accentGs : _P.card,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: sel ? _P.accent : _P.border,
+                                width: sel ? 1.5 : 1),
+                          ),
+                          child: Row(children: [
+                            Text(code,
+                                style: _P.mono(size: 15, w: FontWeight.w600,
+                                    c: sel ? _P.accentB : _P.t1)),
+                            const Spacer(),
+                            if (sel) Icon(Icons.check_circle, color: _P.accent, size: 20),
+                          ]),
+                        ),
+                      ),
                     );
                   },
                 ),
