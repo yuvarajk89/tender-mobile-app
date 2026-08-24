@@ -24,10 +24,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   bool _googleBusy = false;
   bool _obscure = true;
 
-  static const _bgTop = Color(0xFF23347F);
-  static const _bgMid = Color(0xFF141C44);
-  static const _bgBottom = Color(0xFF07091A);
-  static const _gold = Color(0xFFD4A853);
+  // Cohesive navy palette (matches the app's indigo primary). Gold is reserved
+  // for money/bid accents elsewhere — the primary button is brand indigo.
+  static const _bgTop = Color(0xFF2A3B86);
+  static const _bgMid = Color(0xFF16204A);
+  static const _bgBottom = Color(0xFF0A0E20);
+  static const _indigo = Color(0xFF3B4FD9);
+  static const _indigoDeep = Color(0xFF2743B0);
   static const _fieldFill = Color(0xFFF4F6FB);
   static const _ink = Color(0xFF161A2B);
   static const _muted = Color(0xFF6E7488);
@@ -99,9 +102,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                              color: _gold.withOpacity(0.35),
-                              blurRadius: 44,
-                              spreadRadius: 4),
+                              color: Colors.white.withOpacity(0.18),
+                              blurRadius: 48,
+                              spreadRadius: 6),
                         ],
                       ),
                       child: const BrandLogo(size: 100),
@@ -186,27 +189,34 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             ),
                           ),
                           const SizedBox(height: AppSpacing.md),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 52,
-                            child: FilledButton(
-                              onPressed: _busy ? null : _login,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: _gold,
-                                foregroundColor: _ink,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                        AppSpacing.radiusSm)),
-                                textStyle: AppTypography.title,
+                          // Primary action = brand indigo gradient (premium, cohesive).
+                          GestureDetector(
+                            onTap: _busy ? null : _login,
+                            child: Container(
+                              width: double.infinity,
+                              height: 52,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                    colors: [_indigo, _indigoDeep]),
+                                borderRadius:
+                                    BorderRadius.circular(AppSpacing.radiusSm),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: _indigo.withOpacity(0.35),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 6)),
+                                ],
                               ),
                               child: _busy
                                   ? const SizedBox(
                                       height: 22,
                                       width: 22,
                                       child: CircularProgressIndicator(
-                                          strokeWidth: 2, color: _ink))
-                                  : const Text('Sign in'),
+                                          strokeWidth: 2, color: Colors.white))
+                                  : Text('Sign in',
+                                      style: AppTypography.title
+                                          .copyWith(color: Colors.white)),
                             ),
                           ),
                         ],
@@ -299,7 +309,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-          borderSide: const BorderSide(color: _gold, width: 1.6),
+          borderSide: const BorderSide(color: _indigo, width: 1.6),
         ),
       ),
     );
