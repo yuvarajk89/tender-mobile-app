@@ -1,7 +1,7 @@
 name: donda_diamond
 description: "Donda Diamond ERP — rough-diamond tender evaluation (mobile/tablet/web)"
 publish_to: 'none'
-version: 0.1.3+4   # 10 tenders, real BDM-2604 lots, lot thumbnails
+version: 0.1.4+5   # clearer margin control (removed duplicate -15%)
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

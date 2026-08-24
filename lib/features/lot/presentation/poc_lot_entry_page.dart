@@ -729,7 +729,7 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
             ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('BID  −${Fmt.percent(margin)}',
+            Text('BID',
                 style: _P.mono(size: 9, w: FontWeight.w700, color: _P.accent)),
             Text(Fmt.money(v.bid),
                 style: _P.mono(size: 26, w: FontWeight.w800, color: _P.accent)),
@@ -751,11 +751,16 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
                     style: _P.ui(color: _P.t1))),
         ],
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-              color: _P.elevated, borderRadius: BorderRadius.circular(20)),
-          child: Text('−${Fmt.percent(margin)}',
-              style: _P.mono(size: 11, w: FontWeight.w700, color: _P.accent)),
+              color: _P.elevated,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _P.border)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text('Margin ${Fmt.percent(margin)}',
+                style: _P.mono(size: 10, w: FontWeight.w700, color: _P.t2)),
+            Icon(Icons.expand_more, size: 14, color: _P.t2),
+          ]),
         ),
       );
 
