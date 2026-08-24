@@ -206,19 +206,8 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
             Expanded(child: _field('\$ / polished ct', _price)),
           ]),
           const SizedBox(height: AppSpacing.md),
-          // Margin — full-width field + a single tidy row of presets.
+          // Margin — a simple typed field (default 15%).
           _field('Margin %', _margin),
-          const SizedBox(height: AppSpacing.sm),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: [
-              for (final m in [10, 12, 15, 18, 20])
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _marginChip(m),
-                ),
-            ]),
-          ),
           const SizedBox(height: AppSpacing.md),
           // results
           Container(
@@ -309,24 +298,4 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
             isDense: true),
         style: AppTypography.numeric,
       );
-
-  Widget _marginChip(int m) {
-    final selected = _d(_margin).round() == m;
-    return GestureDetector(
-      onTap: () => setState(() => _margin.text = '$m'),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primaryLight : context.surfaceAlt,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-          border: Border.all(
-              color: selected ? AppColors.primary : context.scheme.outlineVariant),
-        ),
-        child: Text('$m%',
-            style: AppTypography.caption.copyWith(
-                fontWeight: FontWeight.w700,
-                color: selected ? AppColors.primary : context.scheme.onSurfaceVariant)),
-      ),
-    );
-  }
 }

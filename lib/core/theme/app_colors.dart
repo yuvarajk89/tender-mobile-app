@@ -11,7 +11,7 @@ class AppColors {
   // Brand — deep indigo/blue "night table under neutral light".
   static const Color primary = Color(0xFF2743B0);
   static const Color primaryDark = Color(0xFF1B2E7A);
-  static const Color primaryLight = Color(0xFFE8ECFB);
+  static const Color primaryLight = Color(0xFFE8ECFB); 
 
   // Accent — used for the BID number, the single most important figure.
   static const Color accent = Color(0xFF13A15A); // "go / money" green
@@ -20,7 +20,7 @@ class AppColors {
   // Semantic
   static const Color success = Color(0xFF13A15A);
   static const Color warning = Color(0xFFC9820A);
-  static const Color danger = Color(0xFFD23B3B); 
+  static const Color danger = Color(0xFFD23B3B);
   static const Color info = Color(0xFF2743B0);
 
   // Neutrals (light theme surface stack)
