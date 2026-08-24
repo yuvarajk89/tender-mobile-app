@@ -107,13 +107,19 @@ class _P {
 }
 
 // ─── grade slots (the BRD fancy vocabulary) ───────────────────────────
-const _slots = ['colour', 'clarity', 'fluor', 'shape'];
+// Capture grade slots: Shape · Colour · Clarity (as confirmed — no Cut/Fluor).
+const _slots = ['shape', 'colour', 'clarity'];
 const _slotLabels = {
+  'shape': 'Shape',
   'colour': 'Colour',
   'clarity': 'Clarity',
-  'fluor': 'Fluor',
-  'shape': 'Shape',
 };
+List<String> _optionsFor(String slot) => switch (slot) {
+      'colour' => GradeVocabulary.colours,
+      'clarity' => GradeVocabulary.clarities,
+      'shape' => GradeVocabulary.shapes,
+      _ => const [],
+    };
 // Grouped vocabulary for the tap-picker (from the BRD's observed lists).
 const Map<String, List<Map<String, dynamic>>> _groups = {
   'colour': [
@@ -125,9 +131,6 @@ const Map<String, List<Map<String, dynamic>>> _groups = {
     {'g': 'Very slight', 'items': ['VVS', 'VS', 'VS2']},
     {'g': 'Slight', 'items': ['SI', 'SI1', 'SI2']},
     {'g': 'Included', 'items': ['I1', 'I3']},
-  ],
-  'fluor': [
-    {'g': 'Fluor / tinge', 'items': ['NON', 'N', 'FB', 'MB', 'MB+', 'MY', 'SSB', 'CBLK', 'BLK']},
   ],
   'shape': [
     {'g': 'Common', 'items': ['RAD', 'SQ RAD', 'OVL', 'PEAR', 'ROUND']},
@@ -989,7 +992,7 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
-                          hintText: 'FVY VS NON OVL  ·  ..2 dup',
+                          hintText: 'OVL FVY VS  ·  ..2 dup',
                           hintStyle:
                               _P.mono(size: 13, w: FontWeight.w400, color: _P.t3),
                           contentPadding: const EdgeInsets.symmetric(vertical: 10),
@@ -1025,6 +1028,8 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
               ),
             ]),
           ),
+          // inline suggestion strip (POC style): chips for the next empty slot
+          _suggestionStrip(),
           // child toggle + save
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
@@ -1066,6 +1071,60 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
           ),
         ]),
       ),
+    );
+  }
+
+  /// Inline suggestion strip — the POC's fast chooser. Shows a label + a
+  /// horizontal row of round chips for the FIRST empty grade slot (Shape →
+  /// Colour → Clarity). Tap a chip → fills it → auto-advances to the next slot.
+  /// Tapping the label opens the full grouped picker. When all slots are filled
+  /// it shows a "✓ ready" hint.
+  Widget _suggestionStrip() {
+    final next = _slots.firstWhere((s) => _parsed.slot(s).isEmpty, orElse: () => '');
+    return SizedBox(
+      height: 46,
+      child: next.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.only(left: 14),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('✓ grade set — add weight & press ↑',
+                    style: _P.mono(size: 11, color: _P.ok)),
+              ),
+            )
+          : SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+              child: Row(children: [
+                GestureDetector(
+                  onTap: () => _openGradePicker(next),
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Text('${_slotLabels[next]!} ▾',
+                        style: _P.mono(size: 9, color: _P.t3)),
+                  ),
+                ),
+                for (final code in _optionsFor(next))
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: GestureDetector(
+                      onTap: () => _setSlot(next, code),
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 40),
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _P.elevated,
+                          borderRadius: BorderRadius.circular(50),
+                          border: Border.all(color: _P.border),
+                        ),
+                        child: Text(code, style: _P.mono(size: 12, color: _P.t1)),
+                      ),
+                    ),
+                  ),
+              ]),
+            ),
     );
   }
 

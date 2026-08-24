@@ -1,7 +1,7 @@
 name: donda_diamond
 description: "Donda Diamond ERP — rough-diamond tender evaluation (mobile/tablet/web)"
 publish_to: 'none'
-version: 0.1.4+5   # clearer margin control (removed duplicate -15%)
+version: 0.1.5+6   # inline grade suggestion strip (shape/colour/clarity)
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

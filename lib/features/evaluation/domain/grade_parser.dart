@@ -22,14 +22,6 @@ class ParsedGrade {
       fluor.isNotEmpty ||
       shape.isNotEmpty;
 
-  /// Which of the four slots are still empty, in display order.
-  List<String> get missingSlots => [
-        if (colour.isEmpty) 'colour',
-        if (clarity.isEmpty) 'clarity',
-        if (fluor.isEmpty) 'fluor',
-        if (shape.isEmpty) 'shape',
-      ];
-
   String slot(String name) => switch (name) {
         'colour' => colour,
         'clarity' => clarity,
