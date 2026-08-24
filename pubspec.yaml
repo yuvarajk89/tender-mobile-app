@@ -1,7 +1,7 @@
 name: donda_diamond
 description: "Donda Diamond ERP — rough-diamond tender evaluation (mobile/tablet/web)"
 publish_to: 'none'
-version: 0.2.6+14   # gallery multi-select images
+version: 0.2.7+15   # cleaner photo thumbs (subtle delete), Gallery label
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

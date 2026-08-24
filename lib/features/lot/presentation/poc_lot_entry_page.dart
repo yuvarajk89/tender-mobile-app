@@ -268,7 +268,7 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
     return Row(children: [
       Expanded(child: _bigBtn(Icons.photo_camera_outlined, 'Camera', _addFromCamera)),
       const SizedBox(width: 10),
-      Expanded(child: _bigBtn(Icons.photo_library_outlined, 'Gallery (multi)', _addFromGallery)),
+      Expanded(child: _bigBtn(Icons.photo_library_outlined, 'Gallery', _addFromGallery)),
     ]);
   }
 

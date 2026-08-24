@@ -145,7 +145,6 @@ class ImageThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     final tag = 'img_${identityHashCode(images)}_$index';
     return Stack(
-      clipBehavior: Clip.none,
       children: [
         GestureDetector(
           onTap: () => showImageViewer(context, images, index, heroTag: tag),
@@ -162,19 +161,21 @@ class ImageThumb extends StatelessWidget {
             ),
           ),
         ),
+        // Small, subtle delete inside the top-right corner — doesn't cover the photo.
         if (onDelete != null)
           Positioned(
-            top: -6,
-            right: -6,
+            top: 3,
+            right: 3,
             child: GestureDetector(
               onTap: onDelete,
               child: Container(
-                width: 20,
-                height: 20,
+                width: 18,
+                height: 18,
                 alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                    color: Color(0xFFD23B3B), shape: BoxShape.circle),
-                child: const Icon(Icons.close, size: 12, color: Colors.white),
+                decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.55),
+                    shape: BoxShape.circle),
+                child: const Icon(Icons.close, size: 11, color: Colors.white),
               ),
             ),
           ),
