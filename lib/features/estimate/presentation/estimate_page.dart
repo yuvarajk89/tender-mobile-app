@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
@@ -6,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/image_utils.dart';
 import '../../../data/mock/mock_data.dart';
 import '../../../data/persistence/local_store.dart';
 import '../../lot/domain/lot.dart';
@@ -199,6 +201,7 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
           Text(widget.lot.lotRef, style: AppTypography.h2),
           Text('${widget.lot.lotName} · ${widget.lot.publishedPieces} stns · ${Fmt.carats(rough)}',
               style: AppTypography.caption),
+          _capturedPhotos(),
           const SizedBox(height: AppSpacing.lg),
           Row(children: [
             Expanded(child: _field('Yield %', _yield)),
@@ -286,6 +289,40 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
           Text(v, style: AppTypography.numeric.copyWith(color: Colors.white)),
         ]),
       );
+
+  // Captured photos — the estimate team taps to view HQ, zoom & rotate to judge
+  // size / shape / colour before estimating.
+  Widget _capturedPhotos() {
+    final imgs = (_c['images'] as List?)?.cast<Uint8List>() ?? const [];
+    if (imgs.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.md),
+        child: Row(children: [
+          Icon(Icons.image_not_supported_outlined,
+              size: 16, color: context.scheme.outline),
+          const SizedBox(width: 6),
+          Text('No photos captured', style: AppTypography.caption),
+        ]),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('${imgs.length} PHOTO${imgs.length == 1 ? '' : 'S'} — tap to zoom & rotate',
+            style: AppTypography.label),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 84,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: imgs.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) => ImageThumb(images: imgs, index: i, size: 84),
+          ),
+        ),
+      ]),
+    );
+  }
 
   Widget _field(String label, TextEditingController c) => TextField(
         controller: c,

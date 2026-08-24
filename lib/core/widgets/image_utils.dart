@@ -213,6 +213,7 @@ class _ImageViewerState extends State<_ImageViewer> {
   late int _index = widget.initialIndex;
   final _tc = TransformationController();
   TapDownDetails? _doubleTapPos;
+  final Map<int, int> _turns = {}; // quarter-turns per image
 
   @override
   void dispose() {
@@ -243,7 +244,10 @@ class _ImageViewerState extends State<_ImageViewer> {
             onPageChanged: (i) => setState(() => _index = i),
             itemCount: widget.images.length,
             itemBuilder: (_, i) {
-              final img = Image.memory(widget.images[i], fit: BoxFit.contain);
+              final img = RotatedBox(
+                quarterTurns: _turns[i] ?? 0,
+                child: Image.memory(widget.images[i], fit: BoxFit.contain),
+              );
               return GestureDetector(
                 onDoubleTapDown: (d) => _doubleTapPos = d,
                 onDoubleTap: _handleDoubleTap,
@@ -271,7 +275,6 @@ class _ImageViewerState extends State<_ImageViewer> {
                   icon: const Icon(Icons.close, color: Colors.white),
                   onPressed: () => Navigator.pop(context),
                 ),
-                const Spacer(),
                 if (widget.images.length > 1)
                   Container(
                     padding:
@@ -283,7 +286,13 @@ class _ImageViewerState extends State<_ImageViewer> {
                     child: Text('${_index + 1} / ${widget.images.length}',
                         style: const TextStyle(color: Colors.white)),
                   ),
-                const SizedBox(width: 40),
+                const Spacer(),
+                IconButton(
+                  tooltip: 'Rotate',
+                  icon: const Icon(Icons.rotate_90_degrees_cw, color: Colors.white),
+                  onPressed: () => setState(() =>
+                      _turns[_index] = ((_turns[_index] ?? 0) + 1) % 4),
+                ),
               ],
             ),
           ),
@@ -292,7 +301,7 @@ class _ImageViewerState extends State<_ImageViewer> {
             left: 0,
             right: 0,
             child: const Center(
-              child: Text('Pinch or double-tap to zoom',
+              child: Text('Pinch or double-tap to zoom · tap ⟳ to rotate',
                   style: TextStyle(color: Colors.white54, fontSize: 12)),
             ),
           ),
