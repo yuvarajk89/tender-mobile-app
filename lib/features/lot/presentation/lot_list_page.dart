@@ -143,7 +143,11 @@ class _LotTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    Text(lot.lotRef.split('-').last, style: AppTypography.title),
+                    Expanded(
+                      child: Text(lot.lotRef,
+                          style: AppTypography.title,
+                          overflow: TextOverflow.ellipsis),
+                    ),
                     const SizedBox(width: AppSpacing.sm),
                     if (lot.willBid) const PillTag(text: 'WILL BID'),
                   ]),

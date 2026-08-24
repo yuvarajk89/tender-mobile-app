@@ -1,7 +1,7 @@
 name: donda_diamond
 description: "Donda Diamond ERP — rough-diamond tender evaluation (mobile/tablet/web)"
 publish_to: 'none'
-version: 0.1.5+6   # inline grade suggestion strip (shape/colour/clarity)
+version: 0.1.6+7   # show full lot ref (BDM-2604-017) in list
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
