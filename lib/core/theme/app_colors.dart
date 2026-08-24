@@ -18,9 +18,9 @@ class AppColors {
   static const Color accentLight = Color(0xFFE3F5EC);
 
   // Semantic
-  static const Color success = Color(0xFF13A15A); 
+  static const Color success = Color(0xFF13A15A);
   static const Color warning = Color(0xFFC9820A);
-  static const Color danger = Color(0xFFD23B3B);
+  static const Color danger = Color(0xFFD23B3B); 
   static const Color info = Color(0xFF2743B0);
 
   // Neutrals (light theme surface stack)

@@ -21,7 +21,6 @@ class TenderListPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tendersAsync = ref.watch(tendersProvider);
-    final user = ref.watch(authControllerProvider).userName;
 
     return Scaffold(
       body: SafeArea(
@@ -34,7 +33,6 @@ class TenderListPage extends ConsumerWidget {
               slivers: [
                 SliverToBoxAdapter(
                   child: _Header(
-                    user: user,
                     tenders: tenders,
                     isDark:
                         ref.watch(themeControllerProvider) == ThemeMode.dark,
@@ -63,12 +61,10 @@ class TenderListPage extends ConsumerWidget {
 
 class _Header extends StatelessWidget {
   const _Header({
-    required this.user,
     required this.tenders,
     required this.isDark,
     required this.onToggleTheme,
   });
-  final String user;
   final List<Tender> tenders;
   final bool isDark;
   final VoidCallback onToggleTheme;
@@ -112,8 +108,6 @@ class _Header extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 2),
-          Text('Hello, $user', style: AppTypography.display),
           const SizedBox(height: AppSpacing.lg),
           Row(children: [
             Expanded(
