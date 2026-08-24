@@ -162,19 +162,15 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
   late final _price = TextEditingController(
       text: ((_c['pricePerCt'] as num?)?.toDouble() ?? 0) == 0 ? '' : '${_c['pricePerCt']}');
   late final _target = TextEditingController();
-  double _margin = 15;
-
-  @override
-  void initState() {
-    super.initState();
-    _margin = (_c['marginPct'] as num?)?.toDouble() ?? 15;
-  }
+  late final _margin = TextEditingController(
+      text: '${((_c['marginPct'] as num?)?.toDouble() ?? 15).toStringAsFixed(0)}');
 
   @override
   void dispose() {
     _yield.dispose();
     _price.dispose();
     _target.dispose();
+    _margin.dispose();
     super.dispose();
   }
 
@@ -186,7 +182,8 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
     final polish = rough * _d(_yield) / 100;
     final total = polish * _d(_price);
     final breakEven = rough > 0 ? total / rough : 0.0;
-    final bid = breakEven * (1 - _margin / 100);
+    final margin = _d(_margin);
+    final bid = breakEven * (1 - margin / 100);
     final target = _d(_target);
     final showPL = target > 0;
     final profit = (breakEven - target) * rough; // vs break-even, per lot
@@ -209,19 +206,22 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
             Expanded(child: _field('\$ / polished ct', _price)),
           ]),
           const SizedBox(height: AppSpacing.md),
+          // Margin — typed field + quick presets (no slider).
+          Text('Margin %', style: AppTypography.label),
+          const SizedBox(height: AppSpacing.sm),
           Row(children: [
-            Text('Margin', style: AppTypography.bodyMuted),
+            SizedBox(width: 92, child: _field('', _margin)),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
-              child: Slider(
-                value: _margin, min: 0, max: 40, divisions: 40,
-                label: Fmt.percent(_margin),
-                activeColor: AppColors.accent,
-                onChanged: (v) => setState(() => _margin = v),
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  for (final m in [10, 12, 15, 18, 20]) _marginChip(m),
+                ],
               ),
             ),
-            Text(Fmt.percent(_margin), style: AppTypography.numeric),
           ]),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.md),
           // results
           Container(
             padding: AppSpacing.card,
@@ -277,7 +277,7 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
               onPressed: () {
                 _c['yieldPct'] = _d(_yield);
                 _c['pricePerCt'] = _d(_price);
-                _c['marginPct'] = _margin;
+                _c['marginPct'] = _d(_margin);
                 _c['status'] = 'estimated';
                 LocalStore.I.persistCaptures();
                 widget.ref.invalidate(lotsProvider(widget.tenderId));
@@ -304,7 +304,31 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
         controller: c,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         onChanged: (_) => setState(() {}),
-        decoration: InputDecoration(labelText: label, isDense: true),
+        textAlign: label.isEmpty ? TextAlign.center : TextAlign.start,
+        decoration: InputDecoration(
+            labelText: label.isEmpty ? null : label,
+            hintText: label.isEmpty ? '%' : null,
+            isDense: true),
         style: AppTypography.numeric,
       );
+
+  Widget _marginChip(int m) {
+    final selected = _d(_margin).round() == m;
+    return GestureDetector(
+      onTap: () => setState(() => _margin.text = '$m'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primaryLight : context.surfaceAlt,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+          border: Border.all(
+              color: selected ? AppColors.primary : context.scheme.outlineVariant),
+        ),
+        child: Text('$m%',
+            style: AppTypography.caption.copyWith(
+                fontWeight: FontWeight.w700,
+                color: selected ? AppColors.primary : context.scheme.onSurfaceVariant)),
+      ),
+    );
+  }
 }
