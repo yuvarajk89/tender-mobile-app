@@ -25,7 +25,7 @@ const _uuid = Uuid();
 
 class _P {
   static late Color bg, surface, card, input, accent, accentB, accentGs, ok,
-      err, warn, info, t1, t2, t3, border, borderA, onAccent;
+      err, info, t1, t2, t3, border, borderA, onAccent;
   static void apply(Brightness b) {
     final d = b == Brightness.dark;
     bg = d ? const Color(0xFF0E1017) : const Color(0xFFF6F7FB);
@@ -37,7 +37,6 @@ class _P {
     accentGs = d ? const Color(0x40D4A853) : const Color(0x33A9812E);
     ok = d ? const Color(0xFF2DD4A0) : const Color(0xFF13A15A);
     err = d ? const Color(0xFFF87171) : const Color(0xFFD23B3B);
-    warn = d ? const Color(0xFFFBBF24) : const Color(0xFFC9820A);
     info = d ? const Color(0xFF60A5FA) : const Color(0xFF2743B0);
     t1 = d ? const Color(0xFFE8E6E3) : const Color(0xFF161A2B);
     t2 = d ? const Color(0xFF9AA0B4) : const Color(0xFF5B627A);
@@ -208,27 +207,25 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
       body: lot == null
           ? const Center(child: Text('Lot not found'))
           : Column(children: [
+              _compactHeader(lot),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                   children: [
-                    _publishedCard(lot),
-                    const SizedBox(height: 12),
-                    _reconcileCard(lot),
-                    const SizedBox(height: 16),
-                    _sectionLabel('SPLITS  (${_subs.length})'),
+                    Row(children: [
+                      _sectionLabel('SPLITS  (${_subs.length})'),
+                      const Spacer(),
+                      if (_subs.any((s) => s.value > 0))
+                        Text('Value ${Fmt.money(_totalValue)}',
+                            style: _P.mono(size: 11, w: FontWeight.w700, c: _P.ok)),
+                    ]),
                     const SizedBox(height: 8),
                     if (_subs.isEmpty)
                       _emptyHint()
                     else
                       for (var i = 0; i < _subs.length; i++) _subCard(lot, i),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     _addSplitButton(lot),
-                    if (_subs.any((s) => s.value > 0)) ...[
-                      const SizedBox(height: 16),
-                      _bidSummary(lot),
-                    ],
-                    const SizedBox(height: 16),
                   ],
                 ),
               ),
@@ -240,100 +237,86 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
   Widget _sectionLabel(String t) =>
       Text(t, style: _P.mono(size: 10, w: FontWeight.w700, c: _P.t3));
 
-  Widget _publishedCard(Lot lot) {
-    final status = MockData.captureStatus(lot.id);
+  double get _totalValue => _subs.fold(0.0, (v, s) => v + s.value);
+  int leftPcs(Lot lot) => lot.publishedPieces - _usedPcs;
+  double leftWt(Lot lot) => lot.publishedCarats - _usedWt;
+
+  // Compact sticky header: published totals + live allocation/remaining.
+  Widget _compactHeader(Lot lot) {
+    final lp = leftPcs(lot);
+    final lw = leftWt(lot);
+    final matched = _subs.isNotEmpty && lp == 0 && lw.abs() < 0.005;
+    final over = lp < 0 || lw < -0.005;
+    final Color barC = matched ? _P.ok : (over ? _P.err : _P.accent);
+    final pcsFrac =
+        lot.publishedPieces > 0 ? (_usedPcs / lot.publishedPieces).clamp(0.0, 1.0) : 0.0;
+    final wtFrac =
+        lot.publishedCarats > 0 ? (_usedWt / lot.publishedCarats).clamp(0.0, 1.0) : 0.0;
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-          color: _P.accentGs,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _P.borderA)),
+      color: _P.surface,
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(
-              child: Text(lot.lotName,
-                  style: _P.mono(size: 15, w: FontWeight.w700, c: _P.accentB))),
-          if (lot.willBid) _pill('WILL BID', _P.accent),
-          if (status != 'todo') ...[
-            const SizedBox(width: 6),
-            _pill(status == 'estimated' ? 'ESTIMATED' : 'IN ESTIMATE',
-                status == 'estimated' ? _P.ok : _P.info),
-          ],
-        ]),
-        const SizedBox(height: 10),
-        Row(children: [
-          _fact('STONES', '${lot.publishedPieces}'),
-          _fact('WEIGHT', Fmt.carats(lot.publishedCarats)),
-          _fact('SIZE', lot.sizeRange),
-        ]),
-      ]),
-    );
-  }
-
-  // Reconcile bar: Σ split pcs / wt vs published, with match/mismatch.
-  Widget _reconcileCard(Lot lot) {
-    final pcsOk = _usedPcs == lot.publishedPieces;
-    final wtOk = (_usedWt - lot.publishedCarats).abs() < 0.05;
-    final allOk = pcsOk && wtOk && _subs.isNotEmpty;
-    final leftPcs = lot.publishedPieces - _usedPcs;
-    final leftWt = lot.publishedCarats - _usedWt;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-          color: _P.card,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: allOk ? _P.ok : _P.border)),
-      child: Column(children: [
-        Row(children: [
-          Text('RECONCILE', style: _P.mono(size: 10, w: FontWeight.w700, c: _P.t3)),
-          const Spacer(),
-          if (_subs.isNotEmpty)
-            Row(children: [
-              Icon(allOk ? Icons.check_circle : Icons.warning_amber_rounded,
-                  size: 15, color: allOk ? _P.ok : _P.warn),
-              const SizedBox(width: 4),
-              Text(allOk ? 'Matched' : 'Not matched',
-                  style: _P.mono(size: 11, w: FontWeight.w700,
-                      c: allOk ? _P.ok : _P.warn)),
-            ]),
-        ]),
-        const SizedBox(height: 10),
-        _reconcileRow('Pieces', '$_usedPcs', '${lot.publishedPieces}',
-            pcsOk, leftPcs == 0 ? null : '${leftPcs.abs()} ${leftPcs > 0 ? 'left' : 'over'}'),
-        const SizedBox(height: 8),
-        _reconcileRow('Weight', Fmt.carats(_usedWt), Fmt.carats(lot.publishedCarats),
-            wtOk, leftWt.abs() < 0.05 ? null : '${Fmt.carats(leftWt.abs())} ${leftWt > 0 ? 'left' : 'over'}'),
-      ]),
-    );
-  }
-
-  Widget _reconcileRow(String label, String used, String total, bool ok, String? left) {
-    final ratio = double.tryParse(total.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 1;
-    final u = double.tryParse(used.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
-    final frac = ratio > 0 ? (u / ratio).clamp(0.0, 1.0) : 0.0;
-    return Row(children: [
-      SizedBox(width: 54, child: Text(label, style: _P.ui(size: 12, c: _P.t2))),
-      const SizedBox(width: 8),
-      Expanded(
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(50),
-          child: LinearProgressIndicator(
-            value: frac,
-            minHeight: 8,
-            backgroundColor: _P.input,
-            valueColor: AlwaysStoppedAnimation(ok ? _P.ok : _P.accent),
+            child: Text(lot.lotName,
+                style: _P.mono(size: 13, w: FontWeight.w700, c: _P.accentB),
+                overflow: TextOverflow.ellipsis),
           ),
-        ),
+          if (lot.willBid) _pill('WILL BID', _P.accent),
+        ]),
+        const SizedBox(height: 8),
+        // two compact allocation meters
+        Row(children: [
+          Expanded(child: _meter('PCS', _usedPcs.toString(), '${lot.publishedPieces}', pcsFrac, barC)),
+          const SizedBox(width: 12),
+          Expanded(child: _meter('WT', _fmt2(_usedWt), _fmt2(lot.publishedCarats), wtFrac, barC)),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Icon(matched ? Icons.check_circle : (over ? Icons.error_outline : Icons.pie_chart_outline),
+              size: 15, color: barC),
+          const SizedBox(width: 5),
+          Text(
+            matched
+                ? 'Fully allocated'
+                : over
+                    ? 'Over by ${lp < 0 ? '${-lp} pc ' : ''}${lw < -0.005 ? '${_fmt2(-lw)} ct' : ''}'
+                    : 'Remaining  ${lp} pc · ${_fmt2(lw)} ct',
+            style: _P.mono(size: 11, w: FontWeight.w700, c: barC),
+          ),
+          const Spacer(),
+          if (!matched && !over && (lp > 0 || lw > 0.005))
+            GestureDetector(
+              onTap: () => _addRemainderSplit(lot),
+              child: Text('+ add remaining',
+                  style: _P.mono(size: 11, w: FontWeight.w700, c: _P.accent)),
+            ),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _meter(String label, String used, String total, double frac, Color c) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Text(label, style: _P.mono(size: 9, w: FontWeight.w700, c: _P.t3)),
+        const Spacer(),
+        Text('$used / $total', style: _P.mono(size: 11, w: FontWeight.w700, c: c)),
+      ]),
+      const SizedBox(height: 4),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(50),
+        child: LinearProgressIndicator(
+            value: frac, minHeight: 6, backgroundColor: _P.input,
+            valueColor: AlwaysStoppedAnimation(c)),
       ),
-      const SizedBox(width: 10),
-      Text('$used / $total',
-          style: _P.mono(size: 12, w: FontWeight.w700, c: ok ? _P.ok : _P.t1)),
-      if (left != null) ...[
-        const SizedBox(width: 6),
-        Text('($left)', style: _P.mono(size: 10, c: _P.warn)),
-      ],
     ]);
   }
+
+  String _fmt2(num n) => n.toStringAsFixed(2);
+
+  // Add a split that auto-takes the exact remaining pcs + wt.
+  void _addRemainderSplit(Lot lot) => _editSub(lot);
 
   Widget _subCard(Lot lot, int i) {
     final s = _subs[i];
@@ -390,43 +373,6 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
       ),
     );
   }
-
-  // Lot bid summary from the on-spot estimates (Σ over subs). Margin fixed 15%
-  // here; the estimate team can refine on the Estimate tab.
-  Widget _bidSummary(Lot lot) {
-    final polish = _subs.fold(0.0, (p, s) => p + s.polishWt);
-    final value = _subs.fold(0.0, (v, s) => v + s.value);
-    final rough = _usedWt > 0 ? _usedWt : lot.publishedCarats;
-    final breakEven = rough > 0 ? value / rough : 0.0;
-    const margin = 15;
-    final bid = breakEven * (1 - margin / 100);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-          color: const Color(0xFF16204A),
-          borderRadius: BorderRadius.circular(14)),
-      child: Column(children: [
-        _sumRow('Polish wt', Fmt.carats(polish)),
-        _sumRow('Polished value', Fmt.money(value)),
-        _sumRow('Break-even \$/ct', Fmt.money(breakEven)),
-        Divider(color: Colors.white24, height: 20),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('BID \$/ct  −15%',
-              style: _P.mono(size: 10, w: FontWeight.w700, c: _P.accentB)),
-          Text(Fmt.money(bid),
-              style: _P.mono(size: 24, w: FontWeight.w800, c: _P.accentB)),
-        ]),
-      ]),
-    );
-  }
-
-  Widget _sumRow(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(k, style: _P.ui(size: 12, c: Colors.white70)),
-          Text(v, style: _P.mono(size: 14, w: FontWeight.w700, c: Colors.white)),
-        ]),
-      );
 
   Widget _emptyHint() => Container(
         padding: const EdgeInsets.all(20),
@@ -493,13 +439,6 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
         child: Text(t, style: _P.mono(size: 9, w: FontWeight.w700, c: c)),
       );
 
-  Widget _fact(String k, String v) => Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(k, style: _P.mono(size: 8, w: FontWeight.w700, c: _P.t3)),
-          const SizedBox(height: 2),
-          Text(v, style: _P.mono(size: 14, w: FontWeight.w700, c: _P.t1)),
-        ]),
-      );
 }
 
 /// Editor sheet for one split sub: grade chips + shade + pcs/wt + photos.
@@ -513,7 +452,8 @@ class _SubEditor extends StatefulWidget {
 
 class _SubEditorState extends State<_SubEditor> {
   late final _pcs = TextEditingController(text: widget.sub.pcs == 0 ? '' : '${widget.sub.pcs}');
-  late final _wt = TextEditingController(text: widget.sub.wt == 0 ? '' : '${widget.sub.wt}');
+  late final _wt = TextEditingController(
+      text: widget.sub.wt == 0 ? '' : widget.sub.wt.toStringAsFixed(2));
   late final _shade = TextEditingController(text: widget.sub.shade);
   late final _yield = TextEditingController(text: widget.sub.yieldPct == 0 ? '' : '${widget.sub.yieldPct}');
   late final _price = TextEditingController(text: widget.sub.pricePerCt == 0 ? '' : '${widget.sub.pricePerCt}');
