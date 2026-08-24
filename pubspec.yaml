@@ -1,7 +1,7 @@
 name: donda_diamond
 description: "Donda Diamond ERP — rough-diamond tender evaluation (mobile/tablet/web)"
 publish_to: 'none'
-version: 0.4.1+28   # split: compact header, auto-remainder, clearer allocation
+version: 0.4.2+29   # split editor: live polish wt + amount as yield/wt/price typed
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

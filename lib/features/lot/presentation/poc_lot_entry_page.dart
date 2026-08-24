@@ -527,17 +527,18 @@ class _SubEditorState extends State<_SubEditor> {
           Row(children: [
             Expanded(child: _numField('Pieces', _pcs, whole: true)),
             const SizedBox(width: 12),
-            Expanded(child: _numField('Rough wt (ct)', _wt)),
+            Expanded(child: _numField('Rough wt (ct)', _wt, onChanged: _recompute)),
           ]),
           const SizedBox(height: 12),
           Text('ON-SPOT ESTIMATE (optional)',
               style: _P.mono(size: 10, w: FontWeight.w700, c: _P.t3)),
           const SizedBox(height: 6),
           Row(children: [
-            Expanded(child: _numField('Yield %', _yield)),
+            Expanded(child: _numField('Yield %', _yield, onChanged: _recompute)),
             const SizedBox(width: 12),
-            Expanded(child: _numField('\$ / polished ct', _price)),
+            Expanded(child: _numField('\$ / polished ct', _price, onChanged: _recompute)),
           ]),
+          _liveAmount(),
           const SizedBox(height: 14),
           Text('PHOTOS', style: _P.mono(size: 10, w: FontWeight.w700, c: _P.t3)),
           const SizedBox(height: 6),
@@ -621,17 +622,60 @@ class _SubEditorState extends State<_SubEditor> {
     );
   }
 
-  Widget _numField(String label, TextEditingController c, {bool whole = false}) {
+  Widget _numField(String label, TextEditingController c,
+      {bool whole = false, VoidCallback? onChanged}) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label.toUpperCase(), style: _P.mono(size: 9, w: FontWeight.w700, c: _P.t3)),
       const SizedBox(height: 4),
       TextField(
         controller: c,
         keyboardType: TextInputType.numberWithOptions(decimal: !whole),
+        onChanged: onChanged == null ? null : (_) => onChanged(),
         style: _P.mono(size: 15, c: _P.t1),
         decoration: _dec(whole ? '0' : '0.00'),
       ),
     ]);
+  }
+
+  void _recompute() => setState(() {});
+
+  // Live amount: polish wt = rough × yield%; amount = polish × $/ct.
+  Widget _liveAmount() {
+    final wt = double.tryParse(_wt.text.trim()) ?? 0;
+    final y = double.tryParse(_yield.text.trim()) ?? 0;
+    final p = double.tryParse(_price.text.trim()) ?? 0;
+    if (y <= 0 && p <= 0) return const SizedBox.shrink();
+    final polish = wt * y / 100;
+    final amount = polish * p;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: _P.accentGs,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _P.borderA),
+        ),
+        child: Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('POLISH WT', style: _P.mono(size: 9, w: FontWeight.w700, c: _P.t3)),
+              const SizedBox(height: 2),
+              Text('${polish.toStringAsFixed(2)} ct',
+                  style: _P.mono(size: 15, w: FontWeight.w700, c: _P.t1)),
+            ]),
+          ),
+          Container(width: 1, height: 30, color: _P.borderA),
+          const SizedBox(width: 14),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('AMOUNT', style: _P.mono(size: 9, w: FontWeight.w700, c: _P.accent)),
+            const SizedBox(height: 2),
+            Text(Fmt.money(amount),
+                style: _P.mono(size: 20, w: FontWeight.w800, c: _P.accentB)),
+          ]),
+        ]),
+      ),
+    );
   }
 
   Widget _mediaBtn(IconData ic, String label, VoidCallback onTap) => GestureDetector(
