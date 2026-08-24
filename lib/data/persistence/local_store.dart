@@ -21,6 +21,7 @@ class LocalStore {
   static const _kLots = 'created_lots_v1';
   static const _kCaptures = 'lot_captures_v1';
   static const _kWillBid = 'willbid_override_v1';
+  static const _kMaster = 'grade_master_v1';
 
   SharedPreferences? _p;
 
@@ -48,10 +49,33 @@ class LocalStore {
       (jsonDecode(wbJson) as Map<String, dynamic>)
           .forEach((lotId, v) => MockData.willBidOverride[lotId] = v as bool);
     }
+    final mJson = _p?.getString(_kMaster);
+    if (mJson != null) {
+      final m = jsonDecode(mJson) as Map<String, dynamic>;
+      void apply(String k, List<String> target) {
+        final v = (m[k] as List?)?.cast<String>();
+        if (v != null) {
+          target
+            ..clear()
+            ..addAll(v);
+        }
+      }
+      apply('shape', MockData.shapes);
+      apply('colour', MockData.colours);
+      apply('clarity', MockData.clarities);
+    }
   }
 
   Future<void> persistWillBid() async =>
       _p?.setString(_kWillBid, jsonEncode(MockData.willBidOverride));
+
+  Future<void> persistMaster() async => _p?.setString(
+      _kMaster,
+      jsonEncode({
+        'shape': MockData.shapes,
+        'colour': MockData.colours,
+        'clarity': MockData.clarities,
+      }));
 
   Future<void> persistLots() async {
     final created =

@@ -104,6 +104,12 @@ class _Header extends StatelessWidget {
                 ),
               ),
               ThemeToggleButton(isDark: isDark, onTap: onToggleTheme),
+              IconButton(
+                tooltip: 'Settings',
+                icon: Icon(Icons.settings_outlined,
+                    color: context.scheme.onSurfaceVariant),
+                onPressed: () => context.go('/settings'),
+              ),
             ],
           ),
           const SizedBox(height: 2),

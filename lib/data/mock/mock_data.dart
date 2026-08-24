@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import '../../features/evaluation/domain/grade_vocabulary.dart';
 import '../../features/lot/domain/lot.dart';
 import '../../features/tender/domain/tender.dart';
 
@@ -240,6 +241,20 @@ class MockData {
       willBidOverride[lot.id] = !willBid(lot);
 
   static void addLot(Lot lot) => lots.add(lot);
+
+  // ── Grade master data (editable in Settings, persisted) ─────────────
+  // Seeded from GradeVocabulary; admin can add/remove values. The capture
+  // screen reads these lists, so changes show up immediately.
+  static final List<String> shapes = List.of(GradeVocabulary.shapes);
+  static final List<String> colours = List.of(GradeVocabulary.colours);
+  static final List<String> clarities = List.of(GradeVocabulary.clarities);
+
+  static List<String> masterList(String key) => switch (key) {
+        'shape' => shapes,
+        'colour' => colours,
+        'clarity' => clarities,
+        _ => const [],
+      };
 
   static Map<String, dynamic>? capture(String lotId) => captures[lotId];
   static String captureStatus(String lotId) =>

@@ -1,7 +1,7 @@
 name: donda_diamond
 description: "Donda Diamond ERP — rough-diamond tender evaluation (mobile/tablet/web)"
 publish_to: 'none'
-version: 0.2.8+16   # modern login + Continue with Google (demo)
+version: 0.2.9+17   # Settings screen: theme, grade master data editor, logout
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

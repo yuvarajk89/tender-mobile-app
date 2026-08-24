@@ -5,6 +5,7 @@ import '../../features/auth/presentation/auth_providers.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/lot/presentation/add_lot_page.dart';
 import '../../features/lot/presentation/poc_lot_entry_page.dart';
+import '../../features/settings/presentation/settings_page.dart';
 import '../../features/tender/presentation/tender_list_page.dart';
 import '../../features/tender/presentation/tender_shell_page.dart';
 
@@ -30,6 +31,8 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // Home — the tender picker (a standalone screen, NOT a tab).
       GoRoute(path: '/home', builder: (_, __) => const TenderListPage()),
+
+      GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
 
       // Per-tender workspace (its own bottom tabs live inside the shell).
       GoRoute(

@@ -7,7 +7,6 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/image_utils.dart';
 import '../../../data/mock/mock_data.dart';
 import '../../../data/persistence/local_store.dart';
-import '../../evaluation/domain/grade_vocabulary.dart';
 import '../domain/lot.dart';
 import 'lot_providers.dart';
 
@@ -54,12 +53,7 @@ class _P {
 
 const _slots = ['shape', 'colour', 'clarity'];
 const _slotLabels = {'shape': 'Shape', 'colour': 'Colour', 'clarity': 'Clarity'};
-List<String> _optionsFor(String s) => switch (s) {
-      'colour' => GradeVocabulary.colours,
-      'clarity' => GradeVocabulary.clarities,
-      'shape' => GradeVocabulary.shapes,
-      _ => const [],
-    };
+List<String> _optionsFor(String s) => MockData.masterList(s);
 
 class PocLotEntryPage extends ConsumerStatefulWidget {
   const PocLotEntryPage({super.key, required this.tenderId, required this.lotId});
