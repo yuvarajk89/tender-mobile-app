@@ -9,7 +9,6 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../core/widgets/brand_logo.dart';
-import '../../auth/presentation/auth_providers.dart';
 import '../domain/tender.dart';
 import 'tender_providers.dart';
 

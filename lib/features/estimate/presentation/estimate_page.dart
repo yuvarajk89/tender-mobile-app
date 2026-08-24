@@ -206,21 +206,19 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
             Expanded(child: _field('\$ / polished ct', _price)),
           ]),
           const SizedBox(height: AppSpacing.md),
-          // Margin — typed field + quick presets (no slider).
-          Text('Margin %', style: AppTypography.label),
+          // Margin — full-width field + a single tidy row of presets.
+          _field('Margin %', _margin),
           const SizedBox(height: AppSpacing.sm),
-          Row(children: [
-            SizedBox(width: 92, child: _field('', _margin)),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Wrap(
-                spacing: 8,
-                children: [
-                  for (final m in [10, 12, 15, 18, 20]) _marginChip(m),
-                ],
-              ),
-            ),
-          ]),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              for (final m in [10, 12, 15, 18, 20])
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _marginChip(m),
+                ),
+            ]),
+          ),
           const SizedBox(height: AppSpacing.md),
           // results
           Container(
