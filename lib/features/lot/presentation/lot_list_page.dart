@@ -136,7 +136,7 @@ class _LotTile extends StatelessWidget {
             horizontal: AppSpacing.lg, vertical: AppSpacing.md),
         child: Row(
           children: [
-            StatusDot(color: statusColor),
+            _thumb(context, statusColor),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
@@ -146,13 +146,6 @@ class _LotTile extends StatelessWidget {
                     Text(lot.lotRef.split('-').last, style: AppTypography.title),
                     const SizedBox(width: AppSpacing.sm),
                     if (lot.willBid) const PillTag(text: 'WILL BID'),
-                    if (lot.hasMultiplePlans) ...[
-                      const SizedBox(width: 6),
-                      PillTag(
-                          text: 'OR',
-                          color: AppColors.warning,
-                          bg: context.surfaceAlt),
-                    ],
                   ]),
                   const SizedBox(height: 2),
                   Text('${lot.lotName} · ${lot.sizeRange}',
@@ -173,6 +166,67 @@ class _LotTile extends StatelessWidget {
             Icon(Icons.chevron_right, color: context.scheme.outline),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Leading thumbnail: the first captured photo, else a diamond placeholder,
+  /// with a status dot and a photo-count badge.
+  Widget _thumb(BuildContext context, Color statusColor) {
+    final photo = MockData.firstPhoto(lot.id);
+    final photos = MockData.photoCount(lot.id);
+    return SizedBox(
+      width: 46,
+      height: 46,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            child: photo != null
+                ? Image.memory(photo, width: 46, height: 46, fit: BoxFit.cover)
+                : Container(
+                    width: 46,
+                    height: 46,
+                    color: context.surfaceAlt,
+                    child: Icon(Icons.diamond_outlined,
+                        size: 22, color: context.scheme.outline),
+                  ),
+          ),
+          // status dot
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                  color: context.scheme.surface, shape: BoxShape.circle),
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration:
+                    BoxDecoration(color: statusColor, shape: BoxShape.circle),
+              ),
+            ),
+          ),
+          // photo count badge
+          if (photos > 0)
+            Positioned(
+              left: -4,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                    color: AppColors.info,
+                    borderRadius: BorderRadius.circular(8)),
+                child: Text('$photos',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ),
+        ],
       ),
     );
   }
