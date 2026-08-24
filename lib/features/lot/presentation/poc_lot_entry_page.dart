@@ -104,10 +104,21 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
         if (s == 'clarity') _clarity = v;
       });
 
-  Future<void> _addPhoto() async {
-    final b = await pickImageBytes(context);
+  Future<void> _addFromCamera() async {
+    final b = await captureFromCamera(context);
     if (b == null) return;
     setState(() => _images.add(b));
+  }
+
+  Future<void> _addFromGallery() async {
+    final list = await pickMultiFromGallery(context);
+    if (list.isEmpty) return;
+    setState(() => _images.addAll(list));
+    if (mounted && list.length > 1) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${list.length} photos added'),
+          duration: const Duration(milliseconds: 1000)));
+    }
   }
 
   void _save({required bool toEstimate}) {
@@ -255,9 +266,9 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
 
   Widget _mediaSection() {
     return Row(children: [
-      Expanded(child: _bigBtn(Icons.photo_camera_outlined, 'Camera', _addPhoto)),
+      Expanded(child: _bigBtn(Icons.photo_camera_outlined, 'Camera', _addFromCamera)),
       const SizedBox(width: 10),
-      Expanded(child: _bigBtn(Icons.photo_library_outlined, 'Gallery', _addPhoto)),
+      Expanded(child: _bigBtn(Icons.photo_library_outlined, 'Gallery (multi)', _addFromGallery)),
     ]);
   }
 

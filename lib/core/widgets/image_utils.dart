@@ -65,6 +65,39 @@ Future<Uint8List?> pickImageBytes(BuildContext context) async {
   }
 }
 
+/// Take a single photo with the device camera → bytes (or null).
+Future<Uint8List?> captureFromCamera(BuildContext context) async {
+  try {
+    final x = await _picker.pickImage(
+        source: ImageSource.camera, maxWidth: 1800, imageQuality: 85);
+    return x == null ? null : await x.readAsBytes();
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Camera error: $e')));
+    }
+    return null;
+  }
+}
+
+/// Pick MULTIPLE images from the gallery at once → list of bytes (empty if none).
+Future<List<Uint8List>> pickMultiFromGallery(BuildContext context) async {
+  try {
+    final xs = await _picker.pickMultiImage(maxWidth: 1800, imageQuality: 85);
+    final out = <Uint8List>[];
+    for (final x in xs) {
+      out.add(await x.readAsBytes());
+    }
+    return out;
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gallery error: $e')));
+    }
+    return const [];
+  }
+}
+
 class _SourceTile extends StatelessWidget {
   const _SourceTile({required this.icon, required this.label, required this.onTap});
   final IconData icon;
