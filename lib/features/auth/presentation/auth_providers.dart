@@ -28,6 +28,13 @@ class AuthController extends StateNotifier<AuthState> {
     return ok;
   }
 
+  /// Demo Google sign-in (UI only for now). In the live app this runs the real
+  /// Google OAuth → MeghaOS session. Here it just signs in so the flow works.
+  Future<void> signInWithGoogle() async {
+    await Future.delayed(const Duration(milliseconds: 600));
+    state = const AuthState(isAuthenticated: true, userName: 'Buyer');
+  }
+
   void logout() => state = const AuthState();
 }
 
