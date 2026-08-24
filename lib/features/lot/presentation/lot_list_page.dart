@@ -8,7 +8,6 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../data/mock/mock_data.dart';
-import '../../evaluation/domain/entities/enums.dart';
 import '../domain/lot.dart';
 import 'lot_providers.dart';
 
@@ -115,13 +114,11 @@ class _LotTile extends StatelessWidget {
   final Lot lot;
 
   (Color, String) get _status {
-    // Saved stones make a lot "done" and drive the count shown.
-    final n = MockData.stoneCount(lot.id);
-    if (n > 0) return (AppColors.statusDone, '$n stone${n > 1 ? 's' : ''}');
-    return switch (lot.workStatus) {
-      LotWorkStatus.done => (AppColors.statusDone, 'Done'),
-      LotWorkStatus.inProgress => (AppColors.warning, 'In progress'),
-      LotWorkStatus.notStarted => (AppColors.statusPending, 'Not started'),
+    // Capture status drives the dot + label (todo → captured → estimated).
+    return switch (MockData.captureStatus(lot.id)) {
+      'estimated' => (AppColors.success, 'Estimated'),
+      'captured' => (AppColors.info, 'In estimate'),
+      _ => (AppColors.statusPending, 'To capture'),
     };
   }
 

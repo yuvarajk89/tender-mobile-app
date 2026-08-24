@@ -19,7 +19,7 @@ class LocalStore {
   static final LocalStore I = LocalStore._();
 
   static const _kLots = 'created_lots_v1';
-  static const _kStones = 'saved_stones_v1';
+  static const _kCaptures = 'lot_captures_v1';
 
   SharedPreferences? _p;
 
@@ -36,12 +36,10 @@ class LocalStore {
         if (!MockData.lots.any((l) => l.id == lot.id)) MockData.lots.add(lot);
       }
     }
-    final stJson = _p?.getString(_kStones);
-    if (stJson != null) {
-      (jsonDecode(stJson) as Map<String, dynamic>).forEach((lotId, stones) {
-        MockData.savedStones[lotId] = (stones as List)
-            .map((s) => _stoneFromJson(s as Map<String, dynamic>))
-            .toList();
+    final capJson = _p?.getString(_kCaptures);
+    if (capJson != null) {
+      (jsonDecode(capJson) as Map<String, dynamic>).forEach((lotId, c) {
+        MockData.captures[lotId] = _captureFromJson(c as Map<String, dynamic>);
       });
     }
   }
@@ -52,13 +50,26 @@ class LocalStore {
     await _p?.setString(_kLots, jsonEncode(created));
   }
 
-  Future<void> persistStones() async {
+  Future<void> persistCaptures() async {
     final out = <String, dynamic>{};
-    MockData.savedStones.forEach((lotId, stones) {
-      out[lotId] = stones.map(_stoneToJson).toList();
-    });
-    await _p?.setString(_kStones, jsonEncode(out));
+    MockData.captures.forEach((lotId, c) => out[lotId] = _captureToJson(c));
+    await _p?.setString(_kCaptures, jsonEncode(out));
   }
+
+  // ── Capture (de)serialization — images as base64, rest passes through ──
+  Map<String, dynamic> _captureToJson(Map<String, dynamic> c) => {
+        ...c,
+        'images': (c['images'] as List? ?? [])
+            .map((b) => base64Encode(b as Uint8List))
+            .toList(),
+      };
+
+  Map<String, dynamic> _captureFromJson(Map<String, dynamic> c) => {
+        ...c,
+        'images': (c['images'] as List? ?? [])
+            .map((e) => base64Decode(e as String))
+            .toList(),
+      };
 
   // ── Lot (de)serialization ──────────────────────────────────────────
   Map<String, dynamic> _lotToMap(Lot l) => {
@@ -86,19 +97,4 @@ class LocalStore {
         willBid: m['willBid'] as bool? ?? false,
         workStatus: LotWorkStatus.values[(m['workStatus'] as int?) ?? 0],
       );
-
-  // ── Stone map (de)serialization — images as base64, rest passes through ─
-  Map<String, dynamic> _stoneToJson(Map<String, dynamic> s) => {
-        ...s,
-        'images': (s['images'] as List? ?? [])
-            .map((b) => base64Encode(b as Uint8List))
-            .toList(),
-      };
-
-  Map<String, dynamic> _stoneFromJson(Map<String, dynamic> s) => {
-        ...s,
-        'images': (s['images'] as List? ?? [])
-            .map((e) => base64Decode(e as String))
-            .toList(),
-      };
 }

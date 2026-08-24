@@ -218,28 +218,36 @@ class MockData {
   static List<Lot> lotsForTender(String tenderId) =>
       lots.where((l) => l.tenderId == tenderId).toList();
 
-  // ── session store (mutable, persisted by LocalStore) ────────────────
-  static final Map<String, List<Map<String, dynamic>>> savedStones = {};
-  static final List<Uint8List> trayImages = [];
+  // ── session store: ONE capture per lot (mutable, persisted by LocalStore) ─
+  // A "capture" is what the buyer records at the table for a lot: grade
+  // (shape/colour/clarity) + photos + notes. The lot's stone count & weight
+  // come from the PDF and are NOT re-entered. After capture the lot moves to the
+  // estimate team, who fill yield% + $/ct (status → estimated).
+  //
+  // captures[lotId] = {
+  //   shape, colour, clarity, notes,       ← buyer (capture)
+  //   images: [Uint8List],
+  //   status: 'captured' | 'estimated',
+  //   yieldPct, pricePerCt, marginPct,     ← estimate team
+  // }
+  static final Map<String, Map<String, dynamic>> captures = {};
   static void addLot(Lot lot) => lots.add(lot);
-  static int stoneCount(String lotId) => savedStones[lotId]?.length ?? 0;
 
-  /// The first captured photo of a lot (for the list thumbnail), or null.
+  static Map<String, dynamic>? capture(String lotId) => captures[lotId];
+  static String captureStatus(String lotId) =>
+      captures[lotId] == null ? 'todo' : (captures[lotId]!['status'] as String);
+  static bool isCaptured(String lotId) => captures.containsKey(lotId);
+  static bool isEstimated(String lotId) => captureStatus(lotId) == 'estimated';
+
   static Uint8List? firstPhoto(String lotId) {
-    final stones = savedStones[lotId];
-    if (stones == null) return null;
-    for (final s in stones) {
-      final imgs = s['images'] as List?;
-      if (imgs != null && imgs.isNotEmpty) return imgs.first as Uint8List;
-    }
-    return null;
+    final imgs = captures[lotId]?['images'] as List?;
+    return (imgs != null && imgs.isNotEmpty) ? imgs.first as Uint8List : null;
   }
 
-  /// Total photos captured on a lot.
-  static int photoCount(String lotId) {
-    final stones = savedStones[lotId];
-    if (stones == null) return 0;
-    return stones.fold<int>(
-        0, (n, s) => n + ((s['images'] as List?)?.length ?? 0));
-  }
+  static int photoCount(String lotId) =>
+      (captures[lotId]?['images'] as List?)?.length ?? 0;
+
+  static List<Lot> capturedLots(String tenderId) => lotsForTender(tenderId)
+      .where((l) => captureStatus(l.id) == 'captured')
+      .toList();
 }

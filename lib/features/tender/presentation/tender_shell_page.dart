@@ -6,9 +6,8 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../estimate/presentation/estimate_page.dart';
 import '../../lot/presentation/lot_list_page.dart';
-import '../../lot/presentation/work_list_page.dart';
-import '../../media/presentation/camera_page.dart';
 import '../../summary/presentation/summary_page.dart';
 import 'tender_providers.dart';
 
@@ -28,8 +27,7 @@ class _TenderShellPageState extends ConsumerState<TenderShellPage> {
 
   static const _tabs = [
     _Tab('Lots', Icons.grid_view_outlined, Icons.grid_view),
-    _Tab('Capture', Icons.photo_camera_outlined, Icons.photo_camera),
-    _Tab('Work list', Icons.checklist_outlined, Icons.checklist),
+    _Tab('Estimate', Icons.calculate_outlined, Icons.calculate),
     _Tab('Summary', Icons.summarize_outlined, Icons.summarize),
   ];
 
@@ -39,8 +37,7 @@ class _TenderShellPageState extends ConsumerState<TenderShellPage> {
     final tender = ref.watch(tenderProvider(tid)).valueOrNull;
     final bodies = [
       LotListBody(tenderId: tid),
-      CameraBody(tenderId: tid),
-      WorkListBody(tenderId: tid),
+      EstimateBody(tenderId: tid),
       SummaryBody(tenderId: tid),
     ];
 
