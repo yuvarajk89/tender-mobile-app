@@ -480,9 +480,21 @@ class _SubEditorState extends State<_SubEditor> {
         if (s == 'clarity') widget.sub.clarity = v;
       });
 
+  // Burst capture — after each shot the camera reopens automatically, so the
+  // buyer keeps shooting fast. Press BACK on the camera to stop.
   Future<void> _camera() async {
-    final b = await captureFromCamera(context);
-    if (b != null) setState(() => widget.sub.images.add(b));
+    var added = 0;
+    while (mounted) {
+      final b = await captureFromCamera(context);
+      if (b == null) break; // user backed out → stop the burst
+      setState(() => widget.sub.images.add(b));
+      added++;
+    }
+    if (mounted && added > 1) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$added photos captured'),
+          duration: const Duration(milliseconds: 1000)));
+    }
   }
 
   Future<void> _gallery() async {
@@ -543,7 +555,7 @@ class _SubEditorState extends State<_SubEditor> {
           Text('PHOTOS', style: _P.mono(size: 10, w: FontWeight.w700, c: _P.t3)),
           const SizedBox(height: 6),
           Row(children: [
-            Expanded(child: _mediaBtn(Icons.photo_camera_outlined, 'Camera', _camera)),
+            Expanded(child: _mediaBtn(Icons.photo_camera_outlined, 'Camera (burst)', _camera)),
             const SizedBox(width: 10),
             Expanded(child: _mediaBtn(Icons.photo_library_outlined, 'Gallery', _gallery)),
           ]),
