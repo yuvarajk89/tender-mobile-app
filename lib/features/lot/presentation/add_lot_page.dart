@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
@@ -100,6 +101,7 @@ class _AddLotPageState extends ConsumerState<AddLotPage> {
               child: TextField(
                 controller: _pcs,
                 keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: const InputDecoration(labelText: 'Pieces'),
               ),
             ),
@@ -109,6 +111,9 @@ class _AddLotPageState extends ConsumerState<AddLotPage> {
                 controller: _carats,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                ],
                 decoration: const InputDecoration(labelText: 'Carats'),
               ),
             ),

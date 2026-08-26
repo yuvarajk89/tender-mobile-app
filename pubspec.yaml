@@ -1,7 +1,7 @@
 name: donda_diamond
 description: "Donda Diamond ERP — rough-diamond tender evaluation (mobile/tablet/web)"
 publish_to: 'none'
-version: 0.4.5+32   # estimate: spot vs team compare, clear compact calc, 2dp
+version: 0.4.6+33   # numeric fields: digits/decimal only (no special chars)
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

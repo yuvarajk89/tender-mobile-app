@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -642,6 +643,9 @@ class _SubEditorState extends State<_SubEditor> {
       TextField(
         controller: c,
         keyboardType: TextInputType.numberWithOptions(decimal: !whole),
+        inputFormatters: whole
+            ? [FilteringTextInputFormatter.digitsOnly]
+            : [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
         onChanged: onChanged == null ? null : (_) => onChanged(),
         style: _P.mono(size: 15, c: _P.t1),
         decoration: _dec(whole ? '0' : '0.00'),
