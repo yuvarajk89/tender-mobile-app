@@ -71,17 +71,34 @@ class _EstimateTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = MockData.capture(lot.id)!;
     final grade = MockData.gradeSummary(lot.id);
-    final yieldPct = (c['yieldPct'] as num?)?.toDouble() ?? 0;
-    final priceCt = (c['pricePerCt'] as num?)?.toDouble() ?? 0;
     final margin = (c['marginPct'] as num?)?.toDouble() ?? 15;
     final estimated = c['status'] == 'estimated';
 
-    // rough → polish → value → break-even → bid
+    // Final = TEAM estimate if entered, else the SPOT rollup from splits.
     final rough = lot.publishedCarats;
-    final polish = rough * yieldPct / 100;
-    final total = polish * priceCt;
-    final breakEven = rough > 0 ? total / rough : 0;
+    final tY = (c['teamYield'] as num?)?.toDouble() ?? 0;
+    final tP = (c['teamPrice'] as num?)?.toDouble() ?? 0;
+    double polish, value, rEff;
+    if (tY > 0 && tP > 0) {
+      rEff = rough;
+      polish = rough * tY / 100;
+      value = polish * tP;
+    } else {
+      double sR = 0, sPol = 0, sVal = 0;
+      for (final s in MockData.subsOf(lot.id)) {
+        final wt = (s['wt'] as num?)?.toDouble() ?? 0;
+        final y = (s['yieldPct'] as num?)?.toDouble() ?? 0;
+        final p = (s['pricePerCt'] as num?)?.toDouble() ?? 0;
+        sR += wt; sPol += wt * y / 100; sVal += (wt * y / 100) * p;
+      }
+      rEff = sR > 0 ? sR : rough;
+      polish = sPol;
+      value = sVal;
+    }
+    final breakEven = rEff > 0 ? value / rEff : 0.0;
     final bid = breakEven * (1 - margin / 100);
+    final yieldPct = rEff > 0 ? polish / rEff * 100 : 0;
+    final priceCt = polish > 0 ? value / polish : 0;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -97,7 +114,7 @@ class _EstimateTile extends ConsumerWidget {
                     style: AppTypography.title, overflow: TextOverflow.ellipsis),
               ),
               if (estimated)
-                PillTag(text: 'BID ${Fmt.money(bid)}', color: AppColors.success, bg: AppColors.accentLight)
+                PillTag(text: 'BID ${Fmt.money2(bid)}', color: AppColors.success, bg: AppColors.accentLight)
               else
                 PillTag(text: 'estimate', color: AppColors.info, bg: context.surfaceAlt),
             ]),
@@ -110,8 +127,8 @@ class _EstimateTile extends ConsumerWidget {
               Row(children: [
                 _mini('Yield', Fmt.percent(yieldPct)),
                 _mini('\$/pol ct', Fmt.money(priceCt)),
-                _mini('Break-even', Fmt.money(breakEven)),
-                _mini('Max bid', Fmt.money(bid), accent: true),
+                _mini('Break-even', Fmt.money2(breakEven)),
+                _mini('Max bid', Fmt.money2(bid), accent: true),
               ]),
             ],
           ]),
@@ -156,19 +173,17 @@ class _EstimatorSheet extends StatefulWidget {
 
 class _EstimatorSheetState extends State<_EstimatorSheet> {
   late final Map<String, dynamic> _c = MockData.capture(widget.lot.id)!;
-  late final _yield = TextEditingController(
-      text: ((_c['yieldPct'] as num?)?.toDouble() ?? 0) == 0 ? '' : '${_c['yieldPct']}');
-  late final _price = TextEditingController(
-      text: ((_c['pricePerCt'] as num?)?.toDouble() ?? 0) == 0 ? '' : '${_c['pricePerCt']}');
-  late final _target = TextEditingController();
+  late final _tYield = TextEditingController(
+      text: ((_c['teamYield'] as num?)?.toDouble() ?? 0) == 0 ? '' : '${_c['teamYield']}');
+  late final _tPrice = TextEditingController(
+      text: ((_c['teamPrice'] as num?)?.toDouble() ?? 0) == 0 ? '' : '${_c['teamPrice']}');
   late final _margin = TextEditingController(
       text: '${((_c['marginPct'] as num?)?.toDouble() ?? 15).toStringAsFixed(0)}');
 
   @override
   void dispose() {
-    _yield.dispose();
-    _price.dispose();
-    _target.dispose();
+    _tYield.dispose();
+    _tPrice.dispose();
     _margin.dispose();
     super.dispose();
   }
@@ -178,15 +193,31 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
   @override
   Widget build(BuildContext context) {
     final rough = widget.lot.publishedCarats;
-    final polish = rough * _d(_yield) / 100;
-    final total = polish * _d(_price);
-    final breakEven = rough > 0 ? total / rough : 0.0;
     final margin = _d(_margin);
-    final bid = breakEven * (1 - margin / 100);
-    final target = _d(_target);
-    final showPL = target > 0;
-    final profit = (breakEven - target) * rough; // vs break-even, per lot
-    final profitPos = profit >= 0;
+
+    // SPOT — rolled up from the splits' on-spot yields (only some lots have it).
+    final subs = MockData.subsOf(widget.lot.id);
+    double sRough = 0, sPolish = 0, sValue = 0;
+    for (final s in subs) {
+      final wt = (s['wt'] as num?)?.toDouble() ?? 0;
+      final y = (s['yieldPct'] as num?)?.toDouble() ?? 0;
+      final p = (s['pricePerCt'] as num?)?.toDouble() ?? 0;
+      sRough += wt;
+      sPolish += wt * y / 100;
+      sValue += (wt * y / 100) * p;
+    }
+    final hasSpot = sValue > 0;
+    final spotRough = sRough > 0 ? sRough : rough;
+    final spotBreakEven = spotRough > 0 ? sValue / spotRough : 0.0;
+    final spotBid = spotBreakEven * (1 - margin / 100);
+
+    // TEAM — the estimate team's own numbers (lot level).
+    final tY = _d(_tYield), tP = _d(_tPrice);
+    final tPolish = rough * tY / 100;
+    final tValue = tPolish * tP;
+    final tBreakEven = rough > 0 ? tValue / rough : 0.0;
+    final tBid = tBreakEven * (1 - margin / 100);
+    final hasTeam = tValue > 0;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -195,82 +226,61 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
       ),
       child: SingleChildScrollView(
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(widget.lot.lotRef, style: AppTypography.h2),
+          Row(children: [
+            Expanded(child: Text(widget.lot.lotRef, style: AppTypography.h2)),
+            _field('Margin %', _margin, width: 96),
+          ]),
           Text('${widget.lot.lotName} · ${widget.lot.publishedPieces} stns · ${Fmt.carats(rough)}',
               style: AppTypography.caption),
           _capturedPhotos(),
-          const SizedBox(height: AppSpacing.lg),
-          Row(children: [
-            Expanded(child: _field('Yield %', _yield)),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(child: _field('\$ / polished ct', _price)),
-          ]),
           const SizedBox(height: AppSpacing.md),
-          // Margin — a simple typed field (default 15%).
-          _field('Margin %', _margin),
-          const SizedBox(height: AppSpacing.md),
-          // results
-          Container(
-            padding: AppSpacing.card,
-            decoration: BoxDecoration(
-                color: AppColors.primaryDark,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
-            child: Column(children: [
-              _resRow('Polish carats', Fmt.carats(polish)),
-              _resRow('Polished value', Fmt.money(total)),
-              _resRow('Break-even \$/ct', Fmt.money(breakEven)),
-              const Divider(color: Colors.white24, height: AppSpacing.lg),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('MAX BID \$/ct', style: AppTypography.label.copyWith(color: AppColors.accentLight)),
-                Text(Fmt.money(bid), style: AppTypography.bidNumber),
-              ]),
-            ]),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          // profit / loss check
-          _field('If we bid \$/ct (check profit)', _target),
-          if (showPL)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: Container(
-                width: double.infinity,
-                padding: AppSpacing.card,
-                decoration: BoxDecoration(
-                  color: (profitPos ? AppColors.success : AppColors.danger).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                ),
-                child: Row(children: [
-                  Icon(profitPos ? Icons.trending_up : Icons.trending_down,
-                      color: profitPos ? AppColors.success : AppColors.danger),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      profitPos
-                          ? 'Profit ${Fmt.money(profit)} vs break-even'
-                          : 'Loss ${Fmt.money(profit.abs())} — above break-even',
-                      style: AppTypography.body.copyWith(
-                          color: profitPos ? AppColors.success : AppColors.danger,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ]),
-              ),
+
+          // SPOT estimate (only when present).
+          if (hasSpot) ...[
+            _estCard(
+              title: 'SPOT (buyer at stall)',
+              tint: AppColors.accent,
+              polish: sPolish, value: sValue, breakEven: spotBreakEven, bid: spotBid,
             ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+
+          // TEAM estimate — always editable, for comparison / final.
+          Text('YOUR ESTIMATE', style: AppTypography.label),
+          const SizedBox(height: AppSpacing.sm),
+          Row(children: [
+            Expanded(child: _field('Yield %', _tYield)),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: _field('\$ / polished ct', _tPrice)),
+          ]),
+          const SizedBox(height: AppSpacing.sm),
+          _estCard(
+            title: 'YOUR CALC',
+            tint: AppColors.primary,
+            polish: tPolish, value: tValue, breakEven: tBreakEven, bid: tBid,
+          ),
+
+          // Comparison (only if both exist).
+          if (hasSpot && hasTeam) ...[
+            const SizedBox(height: AppSpacing.md),
+            _compareBar(spotBid, tBid),
+          ],
+
           const SizedBox(height: AppSpacing.lg),
           SizedBox(
             width: double.infinity,
             height: 50,
             child: FilledButton(
               onPressed: () {
-                _c['yieldPct'] = _d(_yield);
-                _c['pricePerCt'] = _d(_price);
-                _c['marginPct'] = _d(_margin);
+                _c['teamYield'] = tY;
+                _c['teamPrice'] = tP;
+                _c['marginPct'] = margin;
                 _c['status'] = 'estimated';
                 LocalStore.I.persistCaptures();
                 widget.ref.invalidate(lotsProvider(widget.tenderId));
                 Navigator.pop(context);
               },
-              child: const Text('Save estimate'),
+              child: const Text('Confirm estimate'),
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -279,12 +289,82 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
     );
   }
 
-  Widget _resRow(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(k, style: AppTypography.caption.copyWith(color: Colors.white70)),
-          Text(v, style: AppTypography.numeric.copyWith(color: Colors.white)),
+  // Compact result card: polish · value · break-even · MAX BID.
+  Widget _estCard({
+    required String title,
+    required Color tint,
+    required double polish,
+    required double value,
+    required double breakEven,
+    required double bid,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.primaryDark,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border(left: BorderSide(color: tint, width: 3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: AppTypography.label.copyWith(color: tint)),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: _cell('Polish', '${polish.toStringAsFixed(3)} ct')),
+          Expanded(child: _cell('Value', Fmt.money2(value))),
+          Expanded(child: _cell('Break-even', Fmt.money2(breakEven))),
+          Expanded(child: _cell('MAX BID', Fmt.money2(bid), big: true)),
         ]),
+      ]),
+    );
+  }
+
+  Widget _cell(String k, String v, {bool big = false}) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(k.toUpperCase(),
+              style: AppTypography.caption.copyWith(color: Colors.white54, fontSize: 9)),
+          const SizedBox(height: 2),
+          Text(v,
+              style: (big
+                      ? AppTypography.numeric.copyWith(
+                          color: AppColors.accentLight, fontWeight: FontWeight.w800)
+                      : AppTypography.numeric.copyWith(color: Colors.white))
+                  .copyWith(fontSize: big ? 15 : 13)),
+        ],
+      );
+
+  // Spot vs Your bid, with the difference.
+  Widget _compareBar(double spotBid, double teamBid) {
+    final diff = teamBid - spotBid;
+    final up = diff >= 0;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: context.surfaceAlt,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: context.scheme.outlineVariant),
+      ),
+      child: Row(children: [
+        Expanded(child: _cmp('Spot bid', Fmt.money2(spotBid), AppColors.accent)),
+        Icon(Icons.compare_arrows, color: context.scheme.outline),
+        Expanded(child: _cmp('Your bid', Fmt.money2(teamBid), AppColors.primary)),
+        const SizedBox(width: 8),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text('DIFF', style: AppTypography.caption.copyWith(fontSize: 9)),
+          Text('${up ? '+' : ''}${Fmt.money2(diff)}',
+              style: AppTypography.numeric.copyWith(
+                  color: up ? AppColors.success : AppColors.danger)),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _cmp(String k, String v, Color c) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(k.toUpperCase(), style: AppTypography.caption.copyWith(fontSize: 9)),
+          Text(v, style: AppTypography.numeric.copyWith(color: c)),
+        ],
       );
 
   // Captured photos — the estimate team taps to view HQ, zoom & rotate to judge
@@ -321,15 +401,14 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
     );
   }
 
-  Widget _field(String label, TextEditingController c) => TextField(
-        controller: c,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        onChanged: (_) => setState(() {}),
-        textAlign: label.isEmpty ? TextAlign.center : TextAlign.start,
-        decoration: InputDecoration(
-            labelText: label.isEmpty ? null : label,
-            hintText: label.isEmpty ? '%' : null,
-            isDense: true),
-        style: AppTypography.numeric,
-      );
+  Widget _field(String label, TextEditingController c, {double? width}) {
+    final f = TextField(
+      controller: c,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: (_) => setState(() {}),
+      decoration: InputDecoration(labelText: label, isDense: true),
+      style: AppTypography.numeric,
+    );
+    return width == null ? f : SizedBox(width: width, child: f);
+  }
 }
