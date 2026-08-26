@@ -216,7 +216,7 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
                       _sectionLabel('SPLITS  (${_subs.length})'),
                       const Spacer(),
                       if (_subs.any((s) => s.value > 0))
-                        Text('Value ${Fmt.money(_totalValue)}',
+                        Text('Value ${Fmt.money2(_totalValue)}',
                             style: _P.mono(size: 11, w: FontWeight.w700, c: _P.ok)),
                     ]),
                     const SizedBox(height: 8),
@@ -359,7 +359,7 @@ class _PocLotEntryPageState extends ConsumerState<PocLotEntryPage> {
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
-                        '${Fmt.percent(s.yieldPct)} @ ${Fmt.money(s.pricePerCt)} · ${Fmt.money(s.value)}',
+                        '${Fmt.percent(s.yieldPct)} @ ${Fmt.money2(s.pricePerCt)} · ${Fmt.money2(s.value)}',
                         style: _P.mono(size: 10, c: _P.ok)),
                   ),
               ]),
@@ -661,7 +661,7 @@ class _SubEditorState extends State<_SubEditor> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('POLISH WT', style: _P.mono(size: 9, w: FontWeight.w700, c: _P.t3)),
               const SizedBox(height: 2),
-              Text('${polish.toStringAsFixed(2)} ct',
+              Text('${polish.toStringAsFixed(3)} ct',
                   style: _P.mono(size: 15, w: FontWeight.w700, c: _P.t1)),
             ]),
           ),
@@ -670,7 +670,7 @@ class _SubEditorState extends State<_SubEditor> {
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('AMOUNT', style: _P.mono(size: 9, w: FontWeight.w700, c: _P.accent)),
             const SizedBox(height: 2),
-            Text(Fmt.money(amount),
+            Text(Fmt.money2(amount),
                 style: _P.mono(size: 20, w: FontWeight.w800, c: _P.accentB)),
           ]),
         ]),
