@@ -75,27 +75,16 @@ class _EstimateTile extends ConsumerWidget {
     final margin = (c['marginPct'] as num?)?.toDouble() ?? 15;
     final estimated = c['status'] == 'estimated';
 
-    // Final = TEAM estimate if entered, else the SPOT rollup from splits.
+    // Roll up per-split: use the team's yield/price (tY/tP) if set, else spot.
     final rough = lot.publishedCarats;
-    final tY = (c['teamYield'] as num?)?.toDouble() ?? 0;
-    final tP = (c['teamPrice'] as num?)?.toDouble() ?? 0;
-    double polish, value, rEff;
-    if (tY > 0 && tP > 0) {
-      rEff = rough;
-      polish = rough * tY / 100;
-      value = polish * tP;
-    } else {
-      double sR = 0, sPol = 0, sVal = 0;
-      for (final s in MockData.subsOf(lot.id)) {
-        final wt = (s['wt'] as num?)?.toDouble() ?? 0;
-        final y = (s['yieldPct'] as num?)?.toDouble() ?? 0;
-        final p = (s['pricePerCt'] as num?)?.toDouble() ?? 0;
-        sR += wt; sPol += wt * y / 100; sVal += (wt * y / 100) * p;
-      }
-      rEff = sR > 0 ? sR : rough;
-      polish = sPol;
-      value = sVal;
+    double rEff = 0, polish = 0, value = 0;
+    for (final s in MockData.subsOf(lot.id)) {
+      final wt = (s['wt'] as num?)?.toDouble() ?? 0;
+      final y = (s['tY'] as num?)?.toDouble() ?? (s['yieldPct'] as num?)?.toDouble() ?? 0;
+      final p = (s['tP'] as num?)?.toDouble() ?? (s['pricePerCt'] as num?)?.toDouble() ?? 0;
+      rEff += wt; polish += wt * y / 100; value += (wt * y / 100) * p;
     }
+    if (rEff == 0) rEff = rough;
     final breakEven = rEff > 0 ? value / rEff : 0.0;
     final bid = breakEven * (1 - margin / 100);
     final yieldPct = rEff > 0 ? polish / rEff * 100 : 0;
@@ -174,51 +163,55 @@ class _EstimatorSheet extends StatefulWidget {
 
 class _EstimatorSheetState extends State<_EstimatorSheet> {
   late final Map<String, dynamic> _c = MockData.capture(widget.lot.id)!;
-  late final _tYield = TextEditingController(
-      text: ((_c['teamYield'] as num?)?.toDouble() ?? 0) == 0 ? '' : '${_c['teamYield']}');
-  late final _tPrice = TextEditingController(
-      text: ((_c['teamPrice'] as num?)?.toDouble() ?? 0) == 0 ? '' : '${_c['teamPrice']}');
+  late final List<Map<String, dynamic>> _subs = MockData.subsOf(widget.lot.id);
   late final _margin = TextEditingController(
       text: '${((_c['marginPct'] as num?)?.toDouble() ?? 15).toStringAsFixed(0)}');
+  final Map<String, TextEditingController> _y = {};
+  final Map<String, TextEditingController> _p = {};
+
+  @override
+  void initState() {
+    super.initState();
+    for (final s in _subs) {
+      final id = s['id'] as String;
+      final ty = (s['tY'] as num?)?.toDouble() ?? (s['yieldPct'] as num?)?.toDouble() ?? 0;
+      final tp = (s['tP'] as num?)?.toDouble() ?? (s['pricePerCt'] as num?)?.toDouble() ?? 0;
+      _y[id] = TextEditingController(text: ty == 0 ? '' : '$ty');
+      _p[id] = TextEditingController(text: tp == 0 ? '' : '$tp');
+    }
+  }
 
   @override
   void dispose() {
-    _tYield.dispose();
-    _tPrice.dispose();
     _margin.dispose();
+    for (final c in _y.values) {
+      c.dispose();
+    }
+    for (final c in _p.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  double _d(TextEditingController c) => double.tryParse(c.text.trim()) ?? 0;
+  double _d(TextEditingController? c) => double.tryParse(c?.text.trim() ?? '') ?? 0;
 
   @override
   Widget build(BuildContext context) {
-    final rough = widget.lot.publishedCarats;
     final margin = _d(_margin);
 
-    // SPOT — rolled up from the splits' on-spot yields (only some lots have it).
-    final subs = MockData.subsOf(widget.lot.id);
-    double sRough = 0, sPolish = 0, sValue = 0;
-    for (final s in subs) {
+    // Roll up across splits from the team's per-split yield/price.
+    double rough = 0, polish = 0, value = 0;
+    for (final s in _subs) {
+      final id = s['id'] as String;
       final wt = (s['wt'] as num?)?.toDouble() ?? 0;
-      final y = (s['yieldPct'] as num?)?.toDouble() ?? 0;
-      final p = (s['pricePerCt'] as num?)?.toDouble() ?? 0;
-      sRough += wt;
-      sPolish += wt * y / 100;
-      sValue += (wt * y / 100) * p;
+      final y = _d(_y[id]), p = _d(_p[id]);
+      rough += wt;
+      polish += wt * y / 100;
+      value += (wt * y / 100) * p;
     }
-    final hasSpot = sValue > 0;
-    final spotRough = sRough > 0 ? sRough : rough;
-    final spotBreakEven = spotRough > 0 ? sValue / spotRough : 0.0;
-    final spotBid = spotBreakEven * (1 - margin / 100);
-
-    // TEAM — the estimate team's own numbers (lot level).
-    final tY = _d(_tYield), tP = _d(_tPrice);
-    final tPolish = rough * tY / 100;
-    final tValue = tPolish * tP;
-    final tBreakEven = rough > 0 ? tValue / rough : 0.0;
-    final tBid = tBreakEven * (1 - margin / 100);
-    final hasTeam = tValue > 0;
+    if (rough == 0) rough = widget.lot.publishedCarats;
+    final breakEven = rough > 0 ? value / rough : 0.0;
+    final bid = breakEven * (1 - margin / 100);
 
     return Padding(
       padding: EdgeInsets.only(
@@ -231,41 +224,36 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
             Expanded(child: Text(widget.lot.lotRef, style: AppTypography.h2)),
             _field('Margin %', _margin, width: 96),
           ]),
-          Text('${widget.lot.lotName} · ${widget.lot.publishedPieces} stns · ${Fmt.carats(rough)}',
+          Text('${widget.lot.lotName} · ${widget.lot.publishedPieces} stns · ${Fmt.carats(widget.lot.publishedCarats)}',
               style: AppTypography.caption),
           _capturedPhotos(),
           const SizedBox(height: AppSpacing.md),
 
-          // SPOT estimate (only when present).
-          if (hasSpot) ...[
-            _estCard(
-              title: 'SPOT (buyer at stall)',
-              tint: AppColors.accent,
-              polish: sPolish, value: sValue, breakEven: spotBreakEven, bid: spotBid,
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ],
+          Text('ESTIMATE EACH SPLIT (${_subs.length})', style: AppTypography.label),
+          const SizedBox(height: AppSpacing.sm),
+          if (_subs.isEmpty)
+            Text('No splits captured for this lot.', style: AppTypography.caption)
+          else
+            for (var i = 0; i < _subs.length; i++) _splitRow(i),
 
-          // TEAM estimate — always editable, for comparison / final.
-          Text('YOUR ESTIMATE', style: AppTypography.label),
-          const SizedBox(height: AppSpacing.sm),
-          Row(children: [
-            Expanded(child: _field('Yield %', _tYield)),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(child: _field('\$ / polished ct', _tPrice)),
-          ]),
-          const SizedBox(height: AppSpacing.sm),
-          _estCard(
-            title: 'YOUR CALC',
-            tint: AppColors.primary,
-            polish: tPolish, value: tValue, breakEven: tBreakEven, bid: tBid,
+          const SizedBox(height: AppSpacing.md),
+          // Lot totals
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+                color: AppColors.primaryDark,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('LOT TOTAL', style: AppTypography.label.copyWith(color: AppColors.accentLight)),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: _cell('Polish', '${polish.toStringAsFixed(3)} ct')),
+                Expanded(child: _cell('Value', Fmt.money2(value))),
+                Expanded(child: _cell('Break-even', Fmt.money2(breakEven))),
+                Expanded(child: _cell('MAX BID', Fmt.money2(bid), big: true)),
+              ]),
+            ]),
           ),
-
-          // Comparison (only if both exist).
-          if (hasSpot && hasTeam) ...[
-            const SizedBox(height: AppSpacing.md),
-            _compareBar(spotBid, tBid),
-          ],
 
           const SizedBox(height: AppSpacing.lg),
           SizedBox(
@@ -273,8 +261,11 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
             height: 50,
             child: FilledButton(
               onPressed: () {
-                _c['teamYield'] = tY;
-                _c['teamPrice'] = tP;
+                for (final s in _subs) {
+                  final id = s['id'] as String;
+                  s['tY'] = _d(_y[id]);
+                  s['tP'] = _d(_p[id]);
+                }
                 _c['marginPct'] = margin;
                 _c['status'] = 'estimated';
                 LocalStore.I.persistCaptures();
@@ -290,32 +281,54 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
     );
   }
 
-  // Compact result card: polish · value · break-even · MAX BID.
-  Widget _estCard({
-    required String title,
-    required Color tint,
-    required double polish,
-    required double value,
-    required double breakEven,
-    required double bid,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.primaryDark,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border(left: BorderSide(color: tint, width: 3)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: AppTypography.label.copyWith(color: tint)),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(child: _cell('Polish', '${polish.toStringAsFixed(3)} ct')),
-          Expanded(child: _cell('Value', Fmt.money2(value))),
-          Expanded(child: _cell('Break-even', Fmt.money2(breakEven))),
-          Expanded(child: _cell('MAX BID', Fmt.money2(bid), big: true)),
+  // One split: grade + pcs/wt, optional spot reference, team yield/price, amount.
+  Widget _splitRow(int i) {
+    final s = _subs[i];
+    final id = s['id'] as String;
+    final grade = [s['shape'], s['colour'], s['clarity']]
+        .where((x) => (x as String?)?.isNotEmpty ?? false).join(' ');
+    final pcs = (s['pcs'] as num?)?.toInt() ?? 0;
+    final wt = (s['wt'] as num?)?.toDouble() ?? 0;
+    final spotY = (s['yieldPct'] as num?)?.toDouble() ?? 0;
+    final spotP = (s['pricePerCt'] as num?)?.toDouble() ?? 0;
+    final y = _d(_y[id]), p = _d(_p[id]);
+    final amount = (wt * y / 100) * p;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: SectionCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            CircleAvatar(radius: 11, backgroundColor: context.surfaceAlt,
+                child: Text('${i + 1}', style: AppTypography.caption)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(grade.isEmpty ? '(no grade)' : grade,
+                  style: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
+                  overflow: TextOverflow.ellipsis),
+            ),
+            Text('$pcs pc · ${Fmt.carats(wt)}', style: AppTypography.caption),
+          ]),
+          if (spotY > 0) ...[
+            const SizedBox(height: 4),
+            Text('spot: ${Fmt.percent(spotY)} @ ${Fmt.money2(spotP)}',
+                style: AppTypography.caption.copyWith(color: AppColors.accent)),
+          ],
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: _field('Yield %', _y[id]!)),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(child: _field('\$ / pol ct', _p[id]!)),
+            const SizedBox(width: AppSpacing.sm),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('AMOUNT', style: AppTypography.caption.copyWith(fontSize: 9)),
+              Text(amount > 0 ? Fmt.money2(amount) : '—',
+                  style: AppTypography.numeric.copyWith(color: AppColors.accent)),
+            ]),
+          ]),
         ]),
-      ]),
+      ),
     );
   }
 
@@ -334,39 +347,6 @@ class _EstimatorSheetState extends State<_EstimatorSheet> {
         ],
       );
 
-  // Spot vs Your bid, with the difference.
-  Widget _compareBar(double spotBid, double teamBid) {
-    final diff = teamBid - spotBid;
-    final up = diff >= 0;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: context.surfaceAlt,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: context.scheme.outlineVariant),
-      ),
-      child: Row(children: [
-        Expanded(child: _cmp('Spot bid', Fmt.money2(spotBid), AppColors.accent)),
-        Icon(Icons.compare_arrows, color: context.scheme.outline),
-        Expanded(child: _cmp('Your bid', Fmt.money2(teamBid), AppColors.primary)),
-        const SizedBox(width: 8),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('DIFF', style: AppTypography.caption.copyWith(fontSize: 9)),
-          Text('${up ? '+' : ''}${Fmt.money2(diff)}',
-              style: AppTypography.numeric.copyWith(
-                  color: up ? AppColors.success : AppColors.danger)),
-        ]),
-      ]),
-    );
-  }
-
-  Widget _cmp(String k, String v, Color c) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(k.toUpperCase(), style: AppTypography.caption.copyWith(fontSize: 9)),
-          Text(v, style: AppTypography.numeric.copyWith(color: c)),
-        ],
-      );
 
   // Captured photos — the estimate team taps to view HQ, zoom & rotate to judge
   // size / shape / colour before estimating.
